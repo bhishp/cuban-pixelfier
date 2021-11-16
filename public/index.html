@@ -146,6 +146,20 @@
     return newMatrix;
   }
 
+  const jumbleGrid = (blockMatrix) => {
+    const newMatrix = [];
+    for(let i = 0; i < blockMatrix.length; i++) {
+      const subArr = [];
+      newMatrix.push(subArr);
+      for(let j = 0; j < blockMatrix[i].length; j++) {
+        const randIdx = Math.floor(Math.random() * blockMatrix.length);
+        const randSubIdx = Math.floor(Math.random() * blockMatrix[i].length);
+        subArr.push(blockMatrix[randIdx][randSubIdx]);
+      }
+    }
+    return newMatrix;
+  }
+
   const sleep = async (ms = 20) => {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -179,7 +193,7 @@
 
     const matrix = blockify(ctx);
     const pixelatedMatrix = pixelate(matrix);
-    await drawBlockMatrix(ctx, invertBlockMatrix(pixelatedMatrix));
+    await drawBlockMatrix(ctx, jumbleGrid(pixelatedMatrix));
     // drawInverted(ctx, pixelatedMatrix);
 
     // console.log(matrix[0][0].data);
