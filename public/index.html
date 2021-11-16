@@ -21,7 +21,14 @@
       }
 
       #canvas {
+        /*border: 1px solid black;*/
+      }
+
+      #square {
         border: 1px solid black;
+        width: 160px;
+        height: 160px;
+        color: white;
       }
     </style>
 </head>
@@ -31,6 +38,7 @@
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
+    <div id="square"></div>
 </div>
 </body>
 <script>
@@ -40,13 +48,35 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const cubanTmplImg = document.getElementById('cubanTmplImg');
-    console.log(cubanTmplImg)
     if (!cubanTmplImg) {
       return;
     }
+    // so, working on 4x4 blocks means we get 100x100 grid pixel
 
     ctx.drawImage(cubanTmplImg, 0, 0, 400, 400);
-    console.log('dresw')
+    cubanTmplImg.style.display = 'none'; // if we want to hide the src image
+
+    // const imgData = ctx.getImageData(0, 0, 400, 400);
+
+    const pixelWidth = 2;
+    const pixelSize = pixelWidth * pixelWidth;
+
+    const firstSquare = ctx.getImageData(0, 0, pixelWidth, pixelWidth);
+    const firstSquareData = firstSquare.data;
+    const squareEl = document.getElementById('square');
+    const rgbaTotals = firstSquareData.reduce((acc, curr, idx) => {
+      const rgbaIdx = idx % 4;
+      return [
+        ...acc.slice(0, rgbaIdx),
+        acc[rgbaIdx] + curr,
+        ...acc.slice(rgbaIdx + 1)
+      ];
+    }, [0, 0, 0, 0]);
+    const avgRgba = rgbaTotals.map(tot => Math.floor(tot / pixelSize));
+
+    const pixelColor = `rgba(${avgRgba[0]}, ${avgRgba[1]}, ${avgRgba[2]}, ${avgRgba[3] / 255})`;
+    squareEl.style.backgroundColor = pixelColor;
+    squareEl.textContent = pixelColor;
   }
 
   window.onload = () => {
