@@ -146,10 +146,15 @@
     return newMatrix;
   }
 
-  const drawBlockMatrix = (ctx, blockMatrix) => {
+  const sleep = async (ms = 20) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  const drawBlockMatrix = async (ctx, blockMatrix) => {
     for(let i = 0; i < blockMatrix.length; i++) {
       for(let j = 0; j < blockMatrix[i].length; j++) {
         const block = blockMatrix[i][j];
+        await sleep();
         ctx.putImageData(block, i * pixelWidth, j * pixelWidth);
       }
     }
@@ -161,7 +166,7 @@
 
   // note, raw img size is 3532x3532
   // TODO: Extract to scriptfile
-  const execute = () => {
+  const execute = async () => {
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
@@ -174,7 +179,7 @@
 
     const matrix = blockify(ctx);
     const pixelatedMatrix = pixelate(matrix);
-    drawBlockMatrix(ctx, invertBlockMatrix(pixelatedMatrix));
+    await drawBlockMatrix(ctx, invertBlockMatrix(pixelatedMatrix));
     // drawInverted(ctx, pixelatedMatrix);
 
     // console.log(matrix[0][0].data);
