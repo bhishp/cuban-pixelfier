@@ -42,6 +42,116 @@
 </div>
 </body>
 <script>
+  // ideas
+  // 1 - all pixels are jumbled in a mixed up grid, then the grid is sorted to represent the guy, then it turns into a pixel character
+  // 2 - the grid sweeps across and then starts re-ordering the pixels into totally random positions, making abstract art
+  // 2a - the grid doesn't actually stay uniform, but elongates in ways to make abstract art ( a bit like a mondrian)
+
+  // TODO: Make sure that functions take thing as params going forwards
+  // so, working on 4x4 blocks means we get 100x100 grid pixel
+  const imgWidth = 400;
+  const pixelWidth = 16; // 8 is best
+  const blockSize = pixelWidth * pixelWidth;
+
+  // TOOLSET
+
+  // A block is a square collection of pixels
+  // Each block is an ImageData object, built up of a Unit8ClampedArray representing the RGBA of each pixel in that block
+
+  /**
+   * Given an array representation of pixels, return the average RGBA for all those pixels
+   * [1, 1, 3, 255, 3, 3, 3, 255] → [2, 2, 2, 255]
+   * @param pixelArray an array of pixels, returned from imageData.data
+   * @param blockSize the size of the block, in pixels (e.g. 4 for a 4x4 block of pixels)
+   */
+  const calculateBlockAvg = (pixelArray, blockSize) => {
+    const rgbaTotals = pixelArray.reduce((acc, curr, idx) => {
+      const rgbaIdx = idx % 4;
+      return [
+        ...acc.slice(0, rgbaIdx),
+        acc[rgbaIdx] + curr,
+        ...acc.slice(rgbaIdx + 1)
+      ];
+    }, [0, 0, 0, 0]);
+    return rgbaTotals.map(tot => Math.floor(tot / blockSize));
+  }
+
+  /**
+   * Given a single pixel definition [r, g, b, a], extrapolate that to fill an entire block with the same pixel
+   * [1, 2, 3, 255] → [1, 2, 3, 255, 1, 2, 3, 255, 1, 2, 3, 255, 1, 2, 3, 255, 1, 2, 3, 255, 1, 2, 3, 255]
+   * @param pixel a single pixel definition in rgba format
+   * @param blockSize the size of the block, in pixels (e.g. 4 for a 4x4 block of pixels)
+   */
+  const extrapolatePixelToBlock = (pixel, blockSize) => {
+    return new Uint8ClampedArray(
+      new Array(blockSize).fill(pixel).flat()
+    );
+  }
+
+  /**
+   * Split the image into a 2d array of ImageData objects, where each object is a pixelWidth block
+   */
+  const blockify = (ctx) => {
+    const blockMatrix = [];
+
+    let dx = 0;
+    let dy = 0;
+
+    while (dx < imgWidth) {
+      const subArr = [];
+      blockMatrix.push(subArr); // add a new sub-array for y
+      while (dy < imgWidth) {
+
+        // pull out parts of the image in blocks
+        const block = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
+        subArr.push(block);
+        dy = dy + pixelWidth;
+      }
+      dx = dx + pixelWidth;
+      dy = 0;
+    }
+
+    return blockMatrix;
+  }
+
+  /**
+   * Given a blockMatrix - a 2d array of ImageData objects, transform this into a pixelated representation
+   * @param blockMatrix
+   */
+  const pixelate = (blockMatrix) => {
+    const pixelatedMatrix = [];
+    for(let i = 0; i < blockMatrix.length; i++) {
+      const subArr = [];
+      pixelatedMatrix.push(subArr);
+      for(let j = 0; j < blockMatrix[i].length; j++) {
+        const block = blockMatrix[i][j];
+        const avg = calculateBlockAvg(block.data, blockSize);
+        const blockArray = extrapolatePixelToBlock(avg, blockSize);
+        subArr.push(new ImageData(blockArray, pixelWidth, pixelWidth));
+      }
+    }
+
+    return pixelatedMatrix;
+  }
+
+  const drawInverted = (ctx, pixelMatrix) => {
+    for(let i = 0; i < pixelMatrix.length; i++) {
+      for(let j = 0; j < pixelMatrix[i].length; j++) {
+        const pixel = pixelMatrix[i][j];
+        // pixelMatrix.length - i → 24
+        // pixelMatrix.length - i → 23
+        // pixelMatrix.length - i → 22 ...
+        ctx.putImageData(pixel, (pixelMatrix.length - i) * pixelWidth, (pixelMatrix[i].length - j) * pixelWidth);
+        // console.log(pixelMatrix.length - i * pixelWidth);
+        // ctx.putImageData(pixel, pixelMatrix.length - i * pixelWidth, 0);
+      }
+    }
+  }
+
+  // const redify = ([r, g, b, a]) => [Math.min(r * redFactor, 255), g, b, a];
+  // const greenish = ([r, g, b, a]) => [r, Math.min(g * greenFactor, 255), b, a];
+  // const deblue = ([r, g, b, a]) => [r, g, Math.min(b * blueFactor, 255), a];
+
   // note, raw img size is 3532x3532
   // TODO: Extract to scriptfile
   const execute = () => {
@@ -51,60 +161,18 @@
     if (!cubanTmplImg) {
       return;
     }
-    // so, working on 4x4 blocks means we get 100x100 grid pixel
-    const imgWidth = 400;
-    const pixelWidth = 16; // 8 is best
-    const pixelSize = pixelWidth * pixelWidth;
-    const horizontalBlockCount = imgWidth / pixelWidth; // how many blocks across? (same down as we're a square img)
 
     ctx.drawImage(cubanTmplImg, 0, 0, imgWidth, imgWidth);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    const redrawPixels = (dx, dy) => {
-      console.log('redrawPixels')
-      const pickedSquare = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
+    const matrix = blockify(ctx);
+    const pixelatedMatrix = pixelate(matrix);
+    drawInverted(ctx, pixelatedMatrix);
 
-      const rgbaTotals = pickedSquare.data.reduce((acc, curr, idx) => {
-        const rgbaIdx = idx % 4;
-        return [
-          ...acc.slice(0, rgbaIdx),
-          acc[rgbaIdx] + curr,
-          ...acc.slice(rgbaIdx + 1)
-        ];
-      }, [0, 0, 0, 0]);
-      const avgRgba = rgbaTotals.map(tot => Math.floor(tot / pixelSize));
-      const redFactor = 1.2;
-      const greenFactor = 1.8;
-      const blueFactor = 0.6;
-      const redify = ([r, g, b, a]) => [Math.min(r * redFactor, 255), g, b, a];
-      const greenish = ([r, g, b, a]) => [r, Math.min(g * greenFactor, 255), b, a];
-      const deblue = ([r, g, b, a]) => [r, g, Math.min(b * blueFactor, 255), a];
-
-      const redified = deblue(greenish(redify(avgRgba)));
-
-      // draw the new square back to the image
-      const newData = Uint8ClampedArray.from(new Array(pixelSize).fill(redified).flat());
-      const newPixel = new ImageData(newData, pixelWidth, pixelWidth);
-        ctx.putImageData(newPixel, dx, dy);
-      // setTimeout(() => {
-      // }, 600);
-    }
-
-    let dx = 0;
-    let dy = 0;
-
-    setTimeout(() => {
-      while (dx < imgWidth) {
-        console.log({ dx });
-        while (dy < imgWidth) {
-          console.log({ dy })
-          redrawPixels(dx, dy);
-          dy = dy + pixelWidth;
-        }
-        dx = dx + pixelWidth;
-        dy = 0;
-      }
-    }, 1000);
+    // console.log(matrix[0][0].data);
+    // console.log(calculateBlockAvg(matrix[0][0].data, blockSize));
+    // console.log(pixelatedMatrix);
+    // console.log(pixelatedMatrix[0][0].data);
 
     // render the avg on-screen
     // const squareEl = document.getElementById('square');
