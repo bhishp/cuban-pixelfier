@@ -56,14 +56,15 @@
     ctx.drawImage(cubanTmplImg, 0, 0, 400, 400);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    // const imgData = ctx.getImageData(0, 0, 400, 400);
-
-    const pixelWidth = 2;
+    const pixelWidth = 8;
     const pixelSize = pixelWidth * pixelWidth;
 
-    const firstSquare = ctx.getImageData(0, 0, pixelWidth, pixelWidth);
+    const dx = 140;
+    const dy = 140;
+
+    const firstSquare = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
     const firstSquareData = firstSquare.data;
-    const squareEl = document.getElementById('square');
+
     const rgbaTotals = firstSquareData.reduce((acc, curr, idx) => {
       const rgbaIdx = idx % 4;
       return [
@@ -74,6 +75,15 @@
     }, [0, 0, 0, 0]);
     const avgRgba = rgbaTotals.map(tot => Math.floor(tot / pixelSize));
 
+    // draw the new square back to the image
+    const newData = Uint8ClampedArray.from(new Array(pixelSize).fill(avgRgba).flat());
+    const newPixel = new ImageData(newData, pixelWidth, pixelWidth);
+    setTimeout(() => {
+        ctx.putImageData(newPixel, dx, dy);
+    }, 1500)
+
+    // render the avg on-screen
+    const squareEl = document.getElementById('square');
     const pixelColor = `rgba(${avgRgba[0]}, ${avgRgba[1]}, ${avgRgba[2]}, ${avgRgba[3] / 255})`;
     squareEl.style.backgroundColor = pixelColor;
     squareEl.textContent = pixelColor;
