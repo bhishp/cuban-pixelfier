@@ -134,16 +134,23 @@
     return pixelatedMatrix;
   }
 
-  const drawInverted = (ctx, pixelMatrix) => {
-    for(let i = 0; i < pixelMatrix.length; i++) {
-      for(let j = 0; j < pixelMatrix[i].length; j++) {
-        const pixel = pixelMatrix[i][j];
-        // pixelMatrix.length - i → 24
-        // pixelMatrix.length - i → 23
-        // pixelMatrix.length - i → 22 ...
-        ctx.putImageData(pixel, (pixelMatrix.length - i - 1) * pixelWidth, (pixelMatrix[i].length - j - 1) * pixelWidth);
-        // console.log(pixelMatrix.length - i * pixelWidth);
-        // ctx.putImageData(pixel, pixelMatrix.length - i * pixelWidth, 0);
+  const invertBlockMatrix = (blockMatrix) => {
+    const newMatrix = [];
+    for(let i = 0; i < blockMatrix.length; i++) {
+      const subArr = [];
+      newMatrix.push(subArr);
+      for(let j = 0; j < blockMatrix[i].length; j++) {
+        subArr.push(blockMatrix[blockMatrix.length - i -1][blockMatrix[i].length - j -1]);
+      }
+    }
+    return newMatrix;
+  }
+
+  const drawBlockMatrix = (ctx, blockMatrix) => {
+    for(let i = 0; i < blockMatrix.length; i++) {
+      for(let j = 0; j < blockMatrix[i].length; j++) {
+        const block = blockMatrix[i][j];
+        ctx.putImageData(block, i * pixelWidth, j * pixelWidth);
       }
     }
   }
@@ -156,7 +163,7 @@
   // TODO: Extract to scriptfile
   const execute = () => {
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
     if (!cubanTmplImg) {
       return;
@@ -167,7 +174,8 @@
 
     const matrix = blockify(ctx);
     const pixelatedMatrix = pixelate(matrix);
-    drawInverted(ctx, pixelatedMatrix);
+    drawBlockMatrix(ctx, invertBlockMatrix(pixelatedMatrix));
+    // drawInverted(ctx, pixelatedMatrix);
 
     // console.log(matrix[0][0].data);
     // console.log(calculateBlockAvg(matrix[0][0].data, blockSize));
