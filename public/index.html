@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      }
+
+      h1 {
+        margin: 0
+      }
+
+      .container {
+        display: flex;
+        flex-direction: column;
+        margin: 16px 0;
+        align-items: center;
+        gap: 24px
+      }
+
+      #canvas {
+        border: 1px solid black;
+      }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Pixelfier</h1>
+    <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
+    <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
+    <canvas id="canvas" width="400" height="400"></canvas>
+</div>
+</body>
+<script>
+  // note, raw img size is 3532x3532
+  // TODO: Extract to scriptfile
+  const execute = () => {
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const cubanTmplImg = document.getElementById('cubanTmplImg');
+    console.log(cubanTmplImg)
+    if (!cubanTmplImg) {
+      return;
+    }
+
+    ctx.drawImage(cubanTmplImg, 0, 0, 400, 400);
+    console.log('dresw')
+  }
+
+  window.onload = () => {
+    execute();
+  };
+
+
+</script>
+</html>
