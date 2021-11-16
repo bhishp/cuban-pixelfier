@@ -141,7 +141,7 @@
         // pixelMatrix.length - i → 24
         // pixelMatrix.length - i → 23
         // pixelMatrix.length - i → 22 ...
-        ctx.putImageData(pixel, (pixelMatrix.length - i) * pixelWidth, (pixelMatrix[i].length - j) * pixelWidth);
+        ctx.putImageData(pixel, (pixelMatrix.length - i - 1) * pixelWidth, (pixelMatrix[i].length - j - 1) * pixelWidth);
         // console.log(pixelMatrix.length - i * pixelWidth);
         // ctx.putImageData(pixel, pixelMatrix.length - i * pixelWidth, 0);
       }
