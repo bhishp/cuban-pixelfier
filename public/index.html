@@ -52,41 +52,65 @@
       return;
     }
     // so, working on 4x4 blocks means we get 100x100 grid pixel
+    const imgWidth = 400;
+    const pixelWidth = 16; // 8 is best
+    const pixelSize = pixelWidth * pixelWidth;
+    const horizontalBlockCount = imgWidth / pixelWidth; // how many blocks across? (same down as we're a square img)
 
-    ctx.drawImage(cubanTmplImg, 0, 0, 400, 400);
+    ctx.drawImage(cubanTmplImg, 0, 0, imgWidth, imgWidth);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    const pixelWidth = 8;
-    const pixelSize = pixelWidth * pixelWidth;
+    const redrawPixels = (dx, dy) => {
+      console.log('redrawPixels')
+      const pickedSquare = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
 
-    const dx = 140;
-    const dy = 140;
+      const rgbaTotals = pickedSquare.data.reduce((acc, curr, idx) => {
+        const rgbaIdx = idx % 4;
+        return [
+          ...acc.slice(0, rgbaIdx),
+          acc[rgbaIdx] + curr,
+          ...acc.slice(rgbaIdx + 1)
+        ];
+      }, [0, 0, 0, 0]);
+      const avgRgba = rgbaTotals.map(tot => Math.floor(tot / pixelSize));
+      const redFactor = 1.2;
+      const greenFactor = 1.8;
+      const blueFactor = 0.6;
+      const redify = ([r, g, b, a]) => [Math.min(r * redFactor, 255), g, b, a];
+      const greenish = ([r, g, b, a]) => [r, Math.min(g * greenFactor, 255), b, a];
+      const deblue = ([r, g, b, a]) => [r, g, Math.min(b * blueFactor, 255), a];
 
-    const firstSquare = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
-    const firstSquareData = firstSquare.data;
+      const redified = deblue(greenish(redify(avgRgba)));
 
-    const rgbaTotals = firstSquareData.reduce((acc, curr, idx) => {
-      const rgbaIdx = idx % 4;
-      return [
-        ...acc.slice(0, rgbaIdx),
-        acc[rgbaIdx] + curr,
-        ...acc.slice(rgbaIdx + 1)
-      ];
-    }, [0, 0, 0, 0]);
-    const avgRgba = rgbaTotals.map(tot => Math.floor(tot / pixelSize));
-
-    // draw the new square back to the image
-    const newData = Uint8ClampedArray.from(new Array(pixelSize).fill(avgRgba).flat());
-    const newPixel = new ImageData(newData, pixelWidth, pixelWidth);
-    setTimeout(() => {
+      // draw the new square back to the image
+      const newData = Uint8ClampedArray.from(new Array(pixelSize).fill(redified).flat());
+      const newPixel = new ImageData(newData, pixelWidth, pixelWidth);
         ctx.putImageData(newPixel, dx, dy);
-    }, 1500)
+      // setTimeout(() => {
+      // }, 600);
+    }
+
+    let dx = 0;
+    let dy = 0;
+
+    setTimeout(() => {
+      while (dx < imgWidth) {
+        console.log({ dx });
+        while (dy < imgWidth) {
+          console.log({ dy })
+          redrawPixels(dx, dy);
+          dy = dy + pixelWidth;
+        }
+        dx = dx + pixelWidth;
+        dy = 0;
+      }
+    }, 1000);
 
     // render the avg on-screen
-    const squareEl = document.getElementById('square');
-    const pixelColor = `rgba(${avgRgba[0]}, ${avgRgba[1]}, ${avgRgba[2]}, ${avgRgba[3] / 255})`;
-    squareEl.style.backgroundColor = pixelColor;
-    squareEl.textContent = pixelColor;
+    // const squareEl = document.getElementById('square');
+    // const pixelColor = `rgba(${avgRgba[0]}, ${avgRgba[1]}, ${avgRgba[2]}, ${avgRgba[3] / 255})`;
+    // squareEl.style.backgroundColor = pixelColor;
+    // squareEl.textContent = pixelColor;
   }
 
   window.onload = () => {
