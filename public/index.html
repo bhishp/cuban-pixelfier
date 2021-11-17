@@ -162,6 +162,12 @@
     #fillState;
     #crawlers = [];
 
+    constructor(ctx, imageDataMatrix) {
+      this.#ctx = ctx;
+      this.#imageDataMatrix = imageDataMatrix;
+      this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
+    }
+
     #generateEmptyFillState = (matrix) => {
       const fillState = [];
       for(let i = 0; i < matrix.length; i++) {
@@ -172,12 +178,6 @@
         }
       }
       return fillState;
-    }
-
-    constructor(ctx, imageDataMatrix) {
-      this.#ctx = ctx;
-      this.#imageDataMatrix = imageDataMatrix;
-      this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
     }
 
     addCrawler = () => {
