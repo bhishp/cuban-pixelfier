@@ -156,6 +156,54 @@
   // TODO might need a final class, App, which will generate the Grid, allow it to map to Pixels
   // And manage spawning of more crawlers as it needs
 
+  class Grid {
+    #ctx;
+    #imageDataMatrix;
+    #fillState;
+    #crawlers = [];
+
+    #generateEmptyFillState = (matrix) => {
+      const fillState = [];
+      for(let i = 0; i < matrix.length; i++) {
+        const subArr = [];
+        fillState.push(subArr);
+        for(let j = 0; j < matrix[i].length; j++) {
+          subArr.push(false);
+        }
+      }
+      return fillState;
+    }
+
+    constructor(ctx, imageDataMatrix) {
+      this.#ctx = ctx;
+      this.#imageDataMatrix = imageDataMatrix;
+      this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
+    }
+
+    addCrawler = () => {
+      this.#crawlers.push(new PixelCrawler(this.#ctx, this.#imageDataMatrix, this.#fillState));
+    }
+
+    get size() {
+      return {
+        x: this.#imageDataMatrix.length,
+        y: this.#imageDataMatrix[0].length
+      }
+    }
+
+    draw = (x, y) => {
+      if (this.#fillState[x][y]) {
+        console.error('already filled this block, return false;')
+        return false;
+      }
+      const block = this.#imageDataMatrix[x][y];
+      // TODO: Scope the pixelWidth to the class
+      this.#ctx.putImageData(block, x * pixelWidth, y * pixelWidth);
+      this.#fillState[x][y] = true;
+      return true;
+    }
+  }
+
   class PixelCrawler {
     #ctx;
     #grid;
@@ -167,6 +215,13 @@
     constructor(ctx, grid) {
       this.#ctx = ctx;
       this.#grid = grid;
+    }
+
+    get loc() {
+      return {
+        x: this.#x,
+        y: this.#y
+      }
     }
 
     #log = (msg) => {
@@ -305,52 +360,10 @@
     imageMatrix = pixelate(imageMatrix);
     imageMatrix = jumbleGrid(imageMatrix);
 
-    class Grid {
-      #ctx;
-      #imageDataMatrix;
-      #fillState;
+    const grid = new Grid(ctx, imageMatrix);
+    grid.addCrawler();
 
-      #generateEmptyFillState = (matrix) => {
-        const fillState = [];
-        for(let i = 0; i < matrix.length; i++) {
-          const subArr = [];
-          fillState.push(subArr);
-          for(let j = 0; j < matrix[i].length; j++) {
-            subArr.push(false);
-          }
-        }
-        return fillState;
-      }
-
-      constructor(ctx, imageDataMatrix) {
-        this.#ctx = ctx;
-        this.#imageDataMatrix = imageDataMatrix;
-        this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
-      }
-
-      get size() {
-        return {
-          x: this.#imageDataMatrix.length,
-          y: this.#imageDataMatrix[0].length
-        }
-      }
-
-      draw = (x, y) => {
-        if (this.#fillState[x][y]) {
-          console.error('already filled this block, return false;')
-          return false;
-        }
-        const block = this.#imageDataMatrix[x][y];
-        // TODO: Scope the pixelWidth to the class
-        this.#ctx.putImageData(block, x * pixelWidth, y * pixelWidth);
-        this.#fillState[x][y] = true;
-        return true;
-      }
-    }
-
-    const grid2 = new Grid(ctx, imageMatrix);
-
-    const crawler = new PixelCrawler(ctx, grid2);
+    // const crawler = new PixelCrawler(ctx, grid2);
     // console.log(crawler.moveDown());
     // crawler.initiateCrawling();
     // crawler.draw();
