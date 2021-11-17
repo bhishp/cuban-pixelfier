@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <script src="https://cdn.jsdelivr.net/npm/faker@5.5.3/dist/faker.min.js"></script>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
@@ -23,13 +24,6 @@
       #canvas {
         /*border: 1px solid black;*/
       }
-
-      #square {
-        border: 1px solid black;
-        width: 160px;
-        height: 160px;
-        color: white;
-      }
     </style>
 </head>
 <body>
@@ -38,7 +32,6 @@
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
-    <div id="square"></div>
 </div>
 </body>
 <script>
@@ -50,7 +43,7 @@
   // TODO: Make sure that functions take thing as params going forwards
   // so, working on 4x4 blocks means we get 100x100 grid pixel
   const imgWidth = 400;
-  const pixelWidth = 16; // 8 is best
+  const pixelWidth = 80; // 16 is best
   const blockSize = pixelWidth * pixelWidth;
 
   // TOOLSET
@@ -91,7 +84,7 @@
   /**
    * Split the image into a 2d array of ImageData objects, where each object is a pixelWidth block
    */
-  const blockify = (ctx) => {
+  const blockifyImg = (ctx) => {
     const blockMatrix = [];
 
     let dx = 0;
@@ -160,6 +153,123 @@
     return newMatrix;
   }
 
+  // TODO might need a final class, App, which will generate the Grid, allow it to map to Pixels
+  // And manage spawning of more crawlers as it needs
+
+  class PixelCrawler {
+    #ctx;
+    #grid;
+    #x = 0;
+    #y = 0;
+    #crawling = false;
+    #name = faker.name.firstName();
+
+    constructor(ctx, grid) {
+      this.#ctx = ctx;
+      this.#grid = grid;
+    }
+
+    #log = (msg) => {
+      console.debug(`Crawler-${this.#name}: ${msg}`);
+    }
+
+    moveUp = () => {
+      if (this.#y > 0) {
+        this.#y = this.#y - 1;
+        return true;
+      }
+      return false;
+    }
+
+    moveDown = () => {
+      if (this.#y + 1 < this.#grid.size.y) {
+        this.#y = this.#y + 1;
+        return true;
+      }
+      return false;
+    }
+
+    moveLeft = () => {
+      if (this.#x > 0) {
+        this.#x = this.#x - 1;
+        return true;
+      }
+      return false;
+    }
+
+    moveRight = () => {
+      if (this.#x + 1 < this.#grid.size.x) {
+        this.#x = this.#x + 1;
+        return true;
+      }
+      return false;
+    }
+
+    // TODO: The bug problem here is that we don't prevent moving, but prevent drawing (this is not the real way to go)
+    // Maybe the Grid should hold logic of whether the crawler can move
+    // 1. if it hits the wall and 2. if it hits a drawn square
+    move = () => {
+      // try to move in each direction, if not, return false
+      const seed = Math.random();
+      console.log('move', seed);
+      if (seed < 0.25 && this.moveUp()) {
+        console.log('went up')
+        return true;
+      }
+      if (seed < 0.5 && this.moveDown()) {
+        console.log('went down')
+        return true;
+      }
+      if (seed < 0.75 && this.moveLeft()) {
+        console.log('went left')
+        return true;
+      }
+      if (seed <= 1 && this.moveRight()) {
+        console.log('went right')
+        return true;
+      }
+      return false;
+    }
+
+    draw = () => {
+      return this.#grid.draw(this.#x, this.#y);
+    }
+
+    initiateCrawling = () => {
+      if (this.#crawling) {
+        return;
+      }
+      let intervalId;
+      // crawling consists of trying to draw the block, and move
+      // if there is nowhere to the move then we stop crawling
+      const crawl = () => {
+        console.log('crawl n draw');
+        this.draw();
+        if(!this.move()) {
+          this.#log('couldnt move');
+          clearInterval(intervalId);
+          console.log('cleared');
+        }
+      }
+      crawl();
+      intervalId = setInterval(crawl, 5000);
+      // a timeout and then it moves and draws
+    }
+
+
+
+  }
+
+  // TODO: Next, lets try do the snake painter
+  // we need to keep track of the grid state
+  // and see what has been painted and what has not
+  // and the snake needs to assess all its routes (UP, DOWN, LEFT, RIGHT) and make a decision as to whether it can move or not
+
+  // TODO: Add to reqts, use a seed phrase to give a predictable result
+  // So, "Crytpo Cubans are the best". Each component that makes a decision (such as the snake) will use the phrase to make its decision
+  // in a predictable manner. We probably sha the phrase or something
+  // Allow a user to type any phrase, or press a button to use faker to auto-gen a phrase
+
   const sleep = async (ms = 20) => {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -191,21 +301,72 @@
     ctx.drawImage(cubanTmplImg, 0, 0, imgWidth, imgWidth);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    const matrix = blockify(ctx);
-    const pixelatedMatrix = pixelate(matrix);
-    await drawBlockMatrix(ctx, jumbleGrid(pixelatedMatrix));
+    let imageMatrix = blockifyImg(ctx);
+    imageMatrix = pixelate(imageMatrix);
+    imageMatrix = jumbleGrid(imageMatrix);
+
+    class Grid {
+      #ctx;
+      #imageDataMatrix;
+      #fillState;
+
+      #generateEmptyFillState = (matrix) => {
+        const fillState = [];
+        for(let i = 0; i < matrix.length; i++) {
+          const subArr = [];
+          fillState.push(subArr);
+          for(let j = 0; j < matrix[i].length; j++) {
+            subArr.push(false);
+          }
+        }
+        return fillState;
+      }
+
+      constructor(ctx, imageDataMatrix) {
+        this.#ctx = ctx;
+        this.#imageDataMatrix = imageDataMatrix;
+        this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
+      }
+
+      get size() {
+        return {
+          x: this.#imageDataMatrix.length,
+          y: this.#imageDataMatrix[0].length
+        }
+      }
+
+      draw = (x, y) => {
+        if (this.#fillState[x][y]) {
+          console.error('already filled this block, return false;')
+          return false;
+        }
+        const block = this.#imageDataMatrix[x][y];
+        // TODO: Scope the pixelWidth to the class
+        this.#ctx.putImageData(block, x * pixelWidth, y * pixelWidth);
+        this.#fillState[x][y] = true;
+        return true;
+      }
+    }
+
+    const grid2 = new Grid(ctx, imageMatrix);
+
+    const crawler = new PixelCrawler(ctx, grid2);
+    // console.log(crawler.moveDown());
+    // crawler.initiateCrawling();
+    // crawler.draw();
+    // crawler.draw();
+    // crawler.draw();
+    // crawler.draw();
+
+    // const matrix = blockifyImg(ctx);
+    // const pixelatedMatrix = pixelate(matrix);
+    // await drawBlockMatrix(ctx, jumbleGrid(pixelatedMatrix));
     // drawInverted(ctx, pixelatedMatrix);
 
     // console.log(matrix[0][0].data);
     // console.log(calculateBlockAvg(matrix[0][0].data, blockSize));
     // console.log(pixelatedMatrix);
     // console.log(pixelatedMatrix[0][0].data);
-
-    // render the avg on-screen
-    // const squareEl = document.getElementById('square');
-    // const pixelColor = `rgba(${avgRgba[0]}, ${avgRgba[1]}, ${avgRgba[2]}, ${avgRgba[3] / 255})`;
-    // squareEl.style.backgroundColor = pixelColor;
-    // squareEl.textContent = pixelColor;
   }
 
   window.onload = () => {
