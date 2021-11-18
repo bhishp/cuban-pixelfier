@@ -24,6 +24,29 @@
       #canvas {
         /*border: 1px solid black;*/
       }
+
+      #seed {
+        width: 80%;
+        height: 80%;
+        background-color: #fff;
+        color: #000;
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+        padding: 16px;
+        border: 1px solid #000;
+        border-radius: 4px;
+      }
+      #seed:disabled {
+        background: #dddddd;
+      }
+
+      button {
+        text-align: center;
+        padding: 8px;
+        border: 1px solid #000;
+        border-radius: 4px;
+      }
     </style>
 </head>
 <body>
@@ -32,6 +55,8 @@
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
+    <input id="seed" type="text" value="CryptoCubanSocialClub" />
+    <button id="copySeedButton">Copy Seed</button>
 </div>
 </body>
 <script>
@@ -196,6 +221,7 @@
     #fillState;
     #crawlers = [];
 
+    // TODO: Could have a spawn configuration (should it spawn more crawlers when they end? Does it maintain a consistent crawler count)
     constructor(ctx, imageDataMatrix) {
       this.#ctx = ctx;
       this.#imageDataMatrix = imageDataMatrix;
@@ -382,6 +408,17 @@
   // note, raw img size is 3532x3532
   // TODO: Extract to scriptfile
   const execute = async () => {
+    const seedInput = document.getElementById('seed');
+    const copySeedButton = document.getElementById('copySeedButton');
+    let seedValue = seedInput.value;
+    seedInput.oninput = () => {
+      seedValue = seedInput.value;
+    }
+    copySeedButton.onclick = () => {
+      navigator.clipboard.writeText(seedValue);
+    }
+    const lockSeed = () => seedInput.disabled = true;
+
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
@@ -398,8 +435,8 @@
 
     const grid = new Grid(ctx, imageMatrix);
     grid.addCrawler(0, 0);
-    grid.addCrawler(4, 4);
-    grid.initiateCrawlers();
+    // grid.addCrawler(10, 10);
+    // grid.initiateCrawlers();
   }
 
   window.onload = () => {
