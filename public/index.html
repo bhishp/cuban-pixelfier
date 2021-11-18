@@ -46,10 +46,44 @@
   const pixelWidth = 80; // 16 is best
   const blockSize = pixelWidth * pixelWidth;
 
+  // TODO: Add a 'seed random' number
+  // - gives the impression of being random but it is actually generated from a seed
+  // - what are the dynamic things?
+  //    jumbled grid
+  //    crawler count
+  //    crawler steps (is this possible? Yeah, probably, even if we generate a random direction from a seed we can salt it on each decision anyway)
+  //    crawler start loc
+  //    crawler speed
+  // I'm thinking...
+  // - if all the crawlers are deterministic in their direction then even try/fails of moves will still always end up the same evntually
+
+  // an example for staged crawl speed, speeds = [50, 100, 150, 1000] (ms). Random number just picks one from this index
+  // Feels like we might need something like `function generateSeededNumber(min, max) => 'a number based on seed between these values'`
+
+  // - what are the things we want to be different per runs? Probably just the jumble matrix and the snake crawl
   // TOOLSET
 
   // A block is a square collection of pixels
   // Each block is an ImageData object, built up of a Unit8ClampedArray representing the RGBA of each pixel in that block
+
+  // https://stackoverflow.com/a/2450976
+  const shuffle = (array) => {
+    let currentIndex = array.length,  randomIndex;
+
+    // While there remain elements to shuffle...
+    while (currentIndex !== 0) {
+
+      // Pick a remaining element...
+      randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex--;
+
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [
+        array[randomIndex], array[currentIndex]];
+    }
+
+    return array;
+  }
 
   /**
    * Given an array representation of pixels, return the average RGBA for all those pixels
@@ -165,10 +199,15 @@
     constructor(ctx, imageDataMatrix) {
       this.#ctx = ctx;
       this.#imageDataMatrix = imageDataMatrix;
-      this.#fillState = this.#generateEmptyFillState(imageDataMatrix);
+      this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
     }
 
-    #generateEmptyFillState = (matrix) => {
+    /**
+     * Generate a matrix of false values the same size as the imageDataMatrix
+     * @param matrix
+     * @returns {*[]}
+     */
+    #generateFalseMatrix = (matrix) => {
       const fillState = [];
       for(let i = 0; i < matrix.length; i++) {
         const subArr = [];
@@ -180,8 +219,27 @@
       return fillState;
     }
 
-    addCrawler = () => {
-      this.#crawlers.push(new PixelCrawler(this.#ctx, this.#imageDataMatrix, this.#fillState));
+    canMove(x, y) {
+      // cannot move outside the bounds of the matrix
+      if (x < 0 || x >= this.size.x || y < 0 || y >= this.size.y) {
+        return false;
+      }
+
+      // cannot move into a filled block
+      if (this.#fillState[x][y] === true) {
+        return false;
+      }
+
+      // cannot move into a spot occupied by another crawler
+      return !this.#crawlers.some(({ loc }) => loc.x === x && loc.y === y);
+    }
+
+    addCrawler = (x, y) => {
+      this.#crawlers.push(new PixelCrawler(this.#ctx, this, x, y));
+    }
+
+    initiateCrawlers = () => {
+      this.#crawlers.forEach(crawler => crawler.initiate());
     }
 
     get size() {
@@ -207,14 +265,16 @@
   class PixelCrawler {
     #ctx;
     #grid;
-    #x = 0;
-    #y = 0;
-    #crawling = false;
+    #x;
+    #y;
+    #isCrawling = false;
     #name = faker.name.firstName();
 
-    constructor(ctx, grid) {
+    constructor(ctx, grid, x = 0, y = 0) {
       this.#ctx = ctx;
       this.#grid = grid;
+      this.#x = x;
+      this.#y = y;
     }
 
     get loc() {
@@ -228,97 +288,73 @@
       console.debug(`Crawler-${this.#name}: ${msg}`);
     }
 
-    moveUp = () => {
-      if (this.#y > 0) {
-        this.#y = this.#y - 1;
+    tryMove = (x, y) => {
+      if (this.#grid.canMove(x, y)) {
+        this.#log(`CAN move to ${x}, ${y}`);
+        this.#x = x;
+        this.#y = y;
         return true;
       }
+      this.#log(`canNOT move to ${x}, ${y}`);
       return false;
     }
 
-    moveDown = () => {
-      if (this.#y + 1 < this.#grid.size.y) {
-        this.#y = this.#y + 1;
-        return true;
-      }
-      return false;
-    }
+    moveUp = () => this.tryMove(this.#x, this.#y - 1);
+    moveDown = () => this.tryMove(this.#x, this.#y + 1);
+    moveLeft = () => this.tryMove(this.#x - 1, this.#y);
+    moveRight = () => this.tryMove(this.#x + 1, this.#y);
 
-    moveLeft = () => {
-      if (this.#x > 0) {
-        this.#x = this.#x - 1;
-        return true;
-      }
-      return false;
-    }
-
-    moveRight = () => {
-      if (this.#x + 1 < this.#grid.size.x) {
-        this.#x = this.#x + 1;
-        return true;
-      }
-      return false;
-    }
-
-    // TODO: The bug problem here is that we don't prevent moving, but prevent drawing (this is not the real way to go)
-    // Maybe the Grid should hold logic of whether the crawler can move
-    // 1. if it hits the wall and 2. if it hits a drawn square
+    /**
+     * Try to move in each direction, if not, return false
+     * @returns {boolean}
+     */
     move = () => {
-      // try to move in each direction, if not, return false
+      // TODO: First things first, let's get the try order randomised each time
+      // use jumble array, we'll sort it out later
+
+      // TODO: a deterministic way this could work is something like this..
+      // the seed allows us to generate a list of 0,1,2,3 in "random" order
+      // then, each time we call move, it rotates the array in a deterministic way
+      // e.g. rot + 1, then rot + 2, then rot + 3, then back to + 1
+      // e.g.:
+      // - seed generates [4,2,1,3]
+      // - call move, try that order
+      // - next run we try [3,4,2,1] (rot 1)
+      // - next run we try [2,1,3,4] (rot 2)
+      // - next run we try [1,3,4,2] (rot 3)
+      // - next run we try [1,3,4,2] (rot 4)
+      // then start again
+
       const seed = Math.random();
-      console.log('move', seed);
-      if (seed < 0.25 && this.moveUp()) {
-        console.log('went up')
-        return true;
-      }
-      if (seed < 0.5 && this.moveDown()) {
-        console.log('went down')
-        return true;
-      }
-      if (seed < 0.75 && this.moveLeft()) {
-        console.log('went left')
-        return true;
-      }
-      if (seed <= 1 && this.moveRight()) {
-        console.log('went right')
-        return true;
-      }
-      return false;
+      this.#log(`call move: ${seed}`);
+      const directions = [this.moveUp, this.moveDown, this.moveLeft, this.moveRight];
+      return shuffle(directions).some(fn => fn());
     }
 
     draw = () => {
       return this.#grid.draw(this.#x, this.#y);
     }
 
-    initiateCrawling = () => {
-      if (this.#crawling) {
+    initiate = () => {
+      if (this.#isCrawling) {
         return;
       }
       let intervalId;
       // crawling consists of trying to draw the block, and move
       // if there is nowhere to the move then we stop crawling
       const crawl = () => {
-        console.log('crawl n draw');
+        this.#log('crawl n draw');
         this.draw();
         if(!this.move()) {
-          this.#log('couldnt move');
+          this.#log("couldn't move, stopped crawling");
           clearInterval(intervalId);
-          console.log('cleared');
         }
       }
       crawl();
-      intervalId = setInterval(crawl, 5000);
-      // a timeout and then it moves and draws
+      intervalId = setInterval(crawl, 200);
     }
-
-
-
   }
 
-  // TODO: Next, lets try do the snake painter
-  // we need to keep track of the grid state
-  // and see what has been painted and what has not
-  // and the snake needs to assess all its routes (UP, DOWN, LEFT, RIGHT) and make a decision as to whether it can move or not
 
   // TODO: Add to reqts, use a seed phrase to give a predictable result
   // So, "Crytpo Cubans are the best". Each component that makes a decision (such as the snake) will use the phrase to make its decision
@@ -361,25 +397,9 @@
     imageMatrix = jumbleGrid(imageMatrix);
 
     const grid = new Grid(ctx, imageMatrix);
-    grid.addCrawler();
-
-    // const crawler = new PixelCrawler(ctx, grid2);
-    // console.log(crawler.moveDown());
-    // crawler.initiateCrawling();
-    // crawler.draw();
-    // crawler.draw();
-    // crawler.draw();
-    // crawler.draw();
-
-    // const matrix = blockifyImg(ctx);
-    // const pixelatedMatrix = pixelate(matrix);
-    // await drawBlockMatrix(ctx, jumbleGrid(pixelatedMatrix));
-    // drawInverted(ctx, pixelatedMatrix);
-
-    // console.log(matrix[0][0].data);
-    // console.log(calculateBlockAvg(matrix[0][0].data, blockSize));
-    // console.log(pixelatedMatrix);
-    // console.log(pixelatedMatrix[0][0].data);
+    grid.addCrawler(0, 0);
+    grid.addCrawler(4, 4);
+    grid.initiateCrawlers();
   }
 
   window.onload = () => {
