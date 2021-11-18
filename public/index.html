@@ -13,12 +13,15 @@
         margin: 0
       }
 
-      .container {
+      .container,#seedForm {
         display: flex;
         flex-direction: column;
         margin: 16px 0;
         align-items: center;
         gap: 24px
+      }
+      #seedForm {
+        width: 100%;
       }
 
       #canvas {
@@ -47,6 +50,9 @@
         border: 1px solid #000;
         border-radius: 4px;
       }
+      #startButton {
+        background-color: lightgreen;
+      }
     </style>
 </head>
 <body>
@@ -55,8 +61,13 @@
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
+    <form id="seedForm">
     <input id="seed" type="text" value="CryptoCubanSocialClub" />
-    <button id="copySeedButton">Copy Seed</button>
+        <div>
+            <button id="startButton">Start</button>
+            <button type="submit" id="copySeedButton">Copy Seed</button>
+        </div>
+    </form>
 </div>
 </body>
 <script>
@@ -65,11 +76,17 @@
   // 2 - the grid sweeps across and then starts re-ordering the pixels into totally random positions, making abstract art
   // 2a - the grid doesn't actually stay uniform, but elongates in ways to make abstract art ( a bit like a mondrian)
 
+  // TODO: Backlog
+  // - generate using predictable seed
+  // - support generating multiple crawlers
+  // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
+
   // TODO: Make sure that functions take thing as params going forwards
   // so, working on 4x4 blocks means we get 100x100 grid pixel
   const imgWidth = 400;
   const pixelWidth = 80; // 16 is best
   const blockSize = pixelWidth * pixelWidth;
+  const MAX_CRAWLER_COUNT = 10; // Absolute max we can get is 32 because the SHA256 array has a length of 32 and we need to use two numbers for each crawler starting location
 
   // TODO: Add a 'seed random' number
   // - gives the impression of being random but it is actually generated from a seed
@@ -84,6 +101,34 @@
 
   // an example for staged crawl speed, speeds = [50, 100, 150, 1000] (ms). Random number just picks one from this index
   // Feels like we might need something like `function generateSeededNumber(min, max) => 'a number based on seed between these values'`
+  const generateSeededNumber = (min, max) => {
+    // need a way to conver the seed into something that a computer can look at and make up numbers..
+
+  }
+
+  /**
+   * Converts a seed phrase to a sha256 hash. Represented as an array of unsigned 8 bit integers
+   * (a 32-length array of 8-bit unsigned integers, ranges from 0 to 255).
+   * https://stackoverflow.com/a/48161723
+   * @param seed
+   */
+  const shaSeed = async (seed) => {
+    const msgBuffer = new TextEncoder().encode(seed);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    return Array.from(new Uint8Array(hashBuffer))
+  }
+
+  const seededCoords = (a, b, gridWidth) => {
+    const x = a % gridWidth;
+    const y = b % gridWidth;
+    return [x, y];
+  }
+
+  /**
+   * Returns a number between 0 and 16 based on a seed int, n
+
+   */
+  const seededCrawlerCount = (a) => a % MAX_CRAWLER_COUNT;
 
   // - what are the things we want to be different per runs? Probably just the jumble matrix and the snake crawl
   // TOOLSET
@@ -220,12 +265,33 @@
     #imageDataMatrix;
     #fillState;
     #crawlers = [];
+    #seedArray;
+    #hasRun = false;
 
     // TODO: Could have a spawn configuration (should it spawn more crawlers when they end? Does it maintain a consistent crawler count)
-    constructor(ctx, imageDataMatrix) {
+    constructor(ctx, imageDataMatrix, seedArray) {
       this.#ctx = ctx;
       this.#imageDataMatrix = imageDataMatrix;
       this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
+      this.#seedArray = seedArray;
+      this.seedCrawlers();
+      // this.initiateCrawlers();
+    }
+
+    get size() {
+      return {
+        x: this.#imageDataMatrix.length,
+        y: this.#imageDataMatrix[0].length
+      }
+    }
+
+    seedCrawlers = () => {
+      // const crawlerCount = seededCrawlerCount(this.#seedArray[0]);
+      const crawlerCount = 2;
+      for(let i = 0; i < crawlerCount; i++) {
+        const [x, y] = seededCoords(this.#seedArray[i], this.#seedArray[i + 1], this.size.x);
+        this.addCrawler(x, y);
+      }
     }
 
     /**
@@ -245,6 +311,13 @@
       return fillState;
     }
 
+    #isInsideGrid = (x, y) => {
+      return x >= 0 && x < this.size.x && y >= 0 && y < this.size.y;
+    }
+
+    /**
+     * Determine if a crawler can move to the given position
+     */
     canMove(x, y) {
       // cannot move outside the bounds of the matrix
       if (x < 0 || x >= this.size.x || y < 0 || y >= this.size.y) {
@@ -260,18 +333,21 @@
       return !this.#crawlers.some(({ loc }) => loc.x === x && loc.y === y);
     }
 
+    /**
+     * Instantiates a new crawler and adds it to the crawler list
+     */
     addCrawler = (x, y) => {
+      if (!this.canMove(x, y)) {
+        console.error('Cannot add crawler to invalid location');
+        return false;
+      }
       this.#crawlers.push(new PixelCrawler(this.#ctx, this, x, y));
     }
 
     initiateCrawlers = () => {
-      this.#crawlers.forEach(crawler => crawler.initiate());
-    }
-
-    get size() {
-      return {
-        x: this.#imageDataMatrix.length,
-        y: this.#imageDataMatrix[0].length
+      if (!this.#hasRun) {
+        this.#hasRun = true;
+        this.#crawlers.forEach(crawler => crawler.initiate());
       }
     }
 
@@ -301,6 +377,7 @@
       this.#grid = grid;
       this.#x = x;
       this.#y = y;
+      this.#log('crawler constructed');
     }
 
     get loc() {
@@ -311,7 +388,7 @@
     }
 
     #log = (msg) => {
-      console.debug(`Crawler-${this.#name}: ${msg}`);
+      console.debug(`Crawler[${this.#name}]: ${msg}`);
     }
 
     tryMove = (x, y) => {
@@ -351,8 +428,6 @@
       // - next run we try [1,3,4,2] (rot 4)
       // then start again
 
-      const seed = Math.random();
-      this.#log(`call move: ${seed}`);
       const directions = [this.moveUp, this.moveDown, this.moveLeft, this.moveRight];
       return shuffle(directions).some(fn => fn());
     }
@@ -410,12 +485,16 @@
   const execute = async () => {
     const seedInput = document.getElementById('seed');
     const copySeedButton = document.getElementById('copySeedButton');
-    let seedValue = seedInput.value;
-    seedInput.oninput = () => {
-      seedValue = seedInput.value;
+    const seedForm = document.getElementById('seedForm');
+    // const startButton = document.getElementById('startButton');
+    let seedPhrase = seedInput.value;
+    let seedArray = await shaSeed(seedPhrase);
+    seedInput.oninput = async () => {
+      seedPhrase = seedInput.value;
+      seedArray = await shaSeed(seedPhrase);
     }
     copySeedButton.onclick = () => {
-      navigator.clipboard.writeText(seedValue);
+      navigator.clipboard.writeText(seedPhrase);
     }
     const lockSeed = () => seedInput.disabled = true;
 
@@ -426,6 +505,36 @@
       return;
     }
 
+    // ok, where are we now?
+    // I think...
+    // - let's get a single crawler being added to the grid at a seeded location
+    // - feels like we're going to have start putting everything into the grid class now and tracking internal state
+
+
+    // so, what's our first objective?
+    // - use the seed to generate a random starting location
+    // so, the starting location is a random x,y from within the grid constraints
+    // so, let's whack the sha seed into the Grid class
+    // and we need to convert 0-255 into a random x/y coord within boundaries
+
+
+    // returns a length 32 array of uints (0 to 255)
+    // so, we're always going to get a 32 bit array, so let's use each of the indicies for something new?
+    // like seedArr[0] is used for crawler count
+    // seed[1] is used for crawler start locations
+    // seed[3] is used for crawler move order
+
+    // e.g seed[3] => 120
+    // we use this to determine move order like:
+    // 120
+
+    // In reality, we have 32 seeds for each piece of state
+    // for example, crawler location can be inferred from each of the 32 seeds
+    // the same seeds could be used for crawler location...
+    // maybe we give the crawler the seed tokens (e.g. tokens = [seed[0], seed[1], seed[2]], then it cna use these for everything it needs
+
+
+    // draw the image to the canvas at a scaled size
     ctx.drawImage(cubanTmplImg, 0, 0, imgWidth, imgWidth);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
@@ -433,10 +542,14 @@
     imageMatrix = pixelate(imageMatrix);
     imageMatrix = jumbleGrid(imageMatrix);
 
-    const grid = new Grid(ctx, imageMatrix);
-    grid.addCrawler(0, 0);
-    // grid.addCrawler(10, 10);
-    // grid.initiateCrawlers();
+    seedForm.onsubmit = (e) => {
+      e.preventDefault();
+      lockSeed();
+      console.log(seedPhrase)
+      console.log(seedArray);
+      const grid = new Grid(ctx, imageMatrix, seedArray);
+      grid.initiateCrawlers();
+    }
   }
 
   window.onload = () => {
