@@ -71,6 +71,15 @@
 </div>
 </body>
 <script>
+  /**
+   * Access the index in a circular fashion.
+   * [0,1,2].circularGet(3) => 0
+   * (must be positive)
+   */
+  Array.prototype.circularGet = function(idx) {
+    return this[idx % this.length];
+  }
+
   // ideas
   // 1 - all pixels are jumbled in a mixed up grid, then the grid is sorted to represent the guy, then it turns into a pixel character
   // 2 - the grid sweeps across and then starts re-ordering the pixels into totally random positions, making abstract art
@@ -128,6 +137,19 @@
    * Returns a number between 1 and MAX_CRAWLER_COUNT based on a seed int, n
    */
   const seededCrawlerCount = (n) => Math.max(n % MAX_CRAWLER_COUNT, 1);
+
+  /**
+   * Given a seed array, return an dirPref array (4 length array containing the integers 0,1,2,3 at least and only once)
+   * Pass a startIdx to mean the dirPref can be different with the same seed
+   */
+  const seedDirPref = (seedArray, startIdx) => {
+    const FALLBACK_ORDER = [0,1,2,3];
+    return [
+      ...new Set([
+        ...seedArray.map((n, i) => (n + i * startIdx) % 4),
+        ...FALLBACK_ORDER
+      ])];
+  }
 
   // TOOLSET
 
@@ -273,7 +295,7 @@
       const crawlerCount = seededCrawlerCount(this.#seedArray[0]);
       for(let i = 0; i < crawlerCount; i++) {
         const [x, y] = seededCoords(this.#seedArray[i], this.#seedArray[i + 1], this.size.x);
-        this.addCrawler(x, y);
+        this.addCrawler(x, y, i);
       }
     }
 
@@ -290,10 +312,7 @@
         const subArr = [];
         newMatrix.push(subArr);
         for(let j = 0; j < this.size.y; j++) {
-          const seedValue = this.#seedArray[seedIdx];
-          if (seedIdx === this.#seedArray.length - 1) {
-            seedIdx = -1; // start from the beginning of the array
-          }
+          const seedValue = this.#seedArray.circularGet(seedIdx);
           seedIdx++;
 
           const x = seedValue % this.size.x;
@@ -345,13 +364,15 @@
 
     /**
      * Instantiates a new crawler and adds it to the crawler list
+     * i is the index of this crawler as it is added to the grid
      */
-    addCrawler = (x, y) => {
+    addCrawler = (x, y, i) => {
       if (!this.canMove(x, y)) {
         console.error('Cannot add crawler to invalid location');
         return false;
       }
-      this.#crawlers.push(new PixelCrawler(this.#ctx, this, x, y));
+      const dirPref = seedDirPref(this.#seedArray, i);
+      this.#crawlers.push(new PixelCrawler(this.#ctx, this, x, y, dirPref));
     }
 
     initiateCrawlers = () => {
@@ -381,12 +402,15 @@
     #y;
     #isCrawling = false;
     #name = faker.name.firstName();
+    #dirPref; // the preference for move direction
+    #moveCount = 0;
 
-    constructor(ctx, grid, x = 0, y = 0) {
+    constructor(ctx, grid, x = 0, y = 0, initialDirPref) {
       this.#ctx = ctx;
       this.#grid = grid;
       this.#x = x;
       this.#y = y;
+      this.#dirPref = initialDirPref;
       this.#log('crawler constructed');
     }
 
@@ -416,27 +440,28 @@
     moveDown = () => this.tryMove(this.#x, this.#y + 1);
     moveLeft = () => this.tryMove(this.#x - 1, this.#y);
     moveRight = () => this.tryMove(this.#x + 1, this.#y);
+    DIRECTIONS = [this.moveUp, this.moveDown, this.moveLeft, this.moveRight]
 
+    #incrementMoveCounter = () => this.#moveCount++;
+
+    /**
+     * Rotate the direction preference in order to appear more random
+     * Do this by rotating the array in an increasing fashion each time a movement is made
+     */
+    #rotateDirPref = () => {
+      this.#dirPref = this.#dirPref.map((_, i, arr) => arr.circularGet(i + this.#moveCount));
+    };
     /**
      * Try to move in each direction, if not, return false
      * @returns {boolean}
      */
     move = () => {
-      // TODO: a deterministic way this could work is something like this..
-      // the seed allows us to generate a list of 0,1,2,3 in "random" order
-      // then, each time we call move, it rotates the array in a deterministic way
-      // e.g. rot + 1, then rot + 2, then rot + 3, then back to + 1
-      // e.g.:
-      // - seed generates [4,2,1,3]
-      // - call move, try that order
-      // - next run we try [3,4,2,1] (rot 1)
-      // - next run we try [2,1,3,4] (rot 2)
-      // - next run we try [1,3,4,2] (rot 3)
-      // - next run we try [1,3,4,2] (rot 4)
-      // then start again
-
-      const directions = [this.moveUp, this.moveDown, this.moveLeft, this.moveRight];
-      return shuffle(directions).some(fn => fn());
+      // map from dirPref to the move functions
+      const tryOrder = this.#dirPref.map(idx => this.DIRECTIONS[idx]);
+      this.#rotateDirPref();
+      this.#incrementMoveCounter();
+      // try move at least one direction, return false if nome succeeded
+      return tryOrder.some(fn => fn());
     }
 
     draw = () => {
@@ -562,10 +587,11 @@
     execute();
   };
 
+  // Example seed: [53, 127, 159, 98, 103, 212, 178, 219, 154, 101, 73, 144, 213, 104, 164, 217, 181, 190, 94, 52, 173, 60, 35, 173, 86, 107, 154, 103, 125, 116, 88, 205]
   // TODO-list:
   // - move the jumble to the Grid. X
-  // - deterministic jumble grid
-  // - deterministic move order
+  // - deterministic jumble grid. X
+  // - deterministic move order. X
   // - scope everything to the class
   // - variable crawl speed
 
