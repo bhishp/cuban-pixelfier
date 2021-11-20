@@ -83,8 +83,8 @@
 
   // TODO: Make sure that functions take thing as params going forwards
   // so, working on 4x4 blocks means we get 100x100 grid pixel
-  const imgWidth = 400;
-  const pixelWidth = 80; // 16 is best
+  const IMG_WIDTH = 400;
+  const pixelWidth = 40; // 16 is best
   const blockSize = pixelWidth * pixelWidth;
   const MAX_CRAWLER_COUNT = 10; // Absolute max we can get is 32 because the SHA256 array has a length of 32 and we need to use two numbers for each crawler starting location
 
@@ -125,12 +125,10 @@
   }
 
   /**
-   * Returns a number between 0 and 16 based on a seed int, n
-
+   * Returns a number between 1 and MAX_CRAWLER_COUNT based on a seed int, n
    */
-  const seededCrawlerCount = (a) => a % MAX_CRAWLER_COUNT;
+  const seededCrawlerCount = (n) => Math.max(n % MAX_CRAWLER_COUNT, 1);
 
-  // - what are the things we want to be different per runs? Probably just the jumble matrix and the snake crawl
   // TOOLSET
 
   // A block is a square collection of pixels
@@ -194,10 +192,10 @@
     let dx = 0;
     let dy = 0;
 
-    while (dx < imgWidth) {
+    while (dx < IMG_WIDTH) {
       const subArr = [];
       blockMatrix.push(subArr); // add a new sub-array for y
-      while (dy < imgWidth) {
+      while (dy < IMG_WIDTH) {
 
         // pull out parts of the image in blocks
         const block = ctx.getImageData(dx, dy, pixelWidth, pixelWidth);
@@ -243,20 +241,6 @@
     return newMatrix;
   }
 
-  const jumbleGrid = (blockMatrix) => {
-    const newMatrix = [];
-    for(let i = 0; i < blockMatrix.length; i++) {
-      const subArr = [];
-      newMatrix.push(subArr);
-      for(let j = 0; j < blockMatrix[i].length; j++) {
-        const randIdx = Math.floor(Math.random() * blockMatrix.length);
-        const randSubIdx = Math.floor(Math.random() * blockMatrix[i].length);
-        subArr.push(blockMatrix[randIdx][randSubIdx]);
-      }
-    }
-    return newMatrix;
-  }
-
   // TODO might need a final class, App, which will generate the Grid, allow it to map to Pixels
   // And manage spawning of more crawlers as it needs
 
@@ -268,12 +252,12 @@
     #seedArray;
     #hasRun = false;
 
-    // TODO: Could have a spawn configuration (should it spawn more crawlers when they end? Does it maintain a consistent crawler count)
     constructor(ctx, imageDataMatrix, seedArray) {
       this.#ctx = ctx;
       this.#imageDataMatrix = imageDataMatrix;
       this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
       this.#seedArray = seedArray;
+      this.#jumbleGrid();
       this.seedCrawlers();
       // this.initiateCrawlers();
     }
@@ -286,12 +270,38 @@
     }
 
     seedCrawlers = () => {
-      // const crawlerCount = seededCrawlerCount(this.#seedArray[0]);
-      const crawlerCount = 2;
+      const crawlerCount = seededCrawlerCount(this.#seedArray[0]);
       for(let i = 0; i < crawlerCount; i++) {
         const [x, y] = seededCoords(this.#seedArray[i], this.#seedArray[i + 1], this.size.x);
         this.addCrawler(x, y);
       }
+    }
+
+    /**
+     * Jumble the grid in a 'random' (but deterministic) order
+     * Is not actually random but jumbled according to the seed array
+     * Updates the imageDataMatrix in-place
+     */
+    #jumbleGrid = () => {
+      const newMatrix = [];
+      let seedIdx = 0;
+
+      for(let i = 0; i < this.size.x; i++) {
+        const subArr = [];
+        newMatrix.push(subArr);
+        for(let j = 0; j < this.size.y; j++) {
+          const seedValue = this.#seedArray[seedIdx];
+          if (seedIdx === this.#seedArray.length - 1) {
+            seedIdx = -1; // start from the beginning of the array
+          }
+          seedIdx++;
+
+          const x = seedValue % this.size.x;
+          const y = this.size.y - 1 - x;
+          subArr.push(this.#imageDataMatrix[x][y]);
+        }
+      }
+      this.#imageDataMatrix = newMatrix;
     }
 
     /**
@@ -412,9 +422,6 @@
      * @returns {boolean}
      */
     move = () => {
-      // TODO: First things first, let's get the try order randomised each time
-      // use jumble array, we'll sort it out later
-
       // TODO: a deterministic way this could work is something like this..
       // the seed allows us to generate a list of 0,1,2,3 in "random" order
       // then, each time we call move, it rotates the array in a deterministic way
@@ -535,18 +542,17 @@
 
 
     // draw the image to the canvas at a scaled size
-    ctx.drawImage(cubanTmplImg, 0, 0, imgWidth, imgWidth);
+    ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
     let imageMatrix = blockifyImg(ctx);
     imageMatrix = pixelate(imageMatrix);
-    imageMatrix = jumbleGrid(imageMatrix);
+    // imageMatrix = jumbleGrid(imageMatrix);
 
     seedForm.onsubmit = (e) => {
       e.preventDefault();
       lockSeed();
-      console.log(seedPhrase)
-      console.log(seedArray);
+      console.log(seedArray)
       const grid = new Grid(ctx, imageMatrix, seedArray);
       grid.initiateCrawlers();
     }
@@ -556,6 +562,15 @@
     execute();
   };
 
+  // TODO-list:
+  // - move the jumble to the Grid. X
+  // - deterministic jumble grid
+  // - deterministic move order
+  // - scope everything to the class
+  // - variable crawl speed
+
+  // Maybe todo..
+  // - TODO: Could have a spawn configuration (should it spawn more crawlers when they end? Does it maintain a consistent crawler count)
 
 </script>
 </html>
