@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Pixelfier</title>
     <script src="https://cdn.jsdelivr.net/npm/faker@5.5.3/dist/faker.min.js"></script>
     <style>
       body {
@@ -59,10 +59,10 @@
 <div class="container">
     <h1>Pixelfier</h1>
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
-    <img id="cubanTmplImg" src="img/cuban-tmpl-big.jpg" alt="Crypto Cuban Template" width="400px"/>
+    <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
     <form id="seedForm">
-    <input id="seed" type="text" value="CryptoCubanSocialClub" />
+        <input id="seed" type="text" value="CryptoCubanSocialClub" />
         <div>
             <button id="startButton">Start</button>
             <button type="submit" id="copySeedButton">Copy Seed</button>
@@ -83,7 +83,7 @@
   const IMG_WIDTH = 400;
   const PIXEL_WIDTHS = [20];
   const MAX_CRAWLER_COUNT = 10; // Absolute max we can get is 32 because the SHA256 array has a length of 32 and we need to use two numbers for each crawler starting location
-  const CRAWL_SPEEDS = [200];
+  const CRAWL_SPEEDS = [20];
   const DEFAULT_COLOR_THRESHOLD = 12;
 
   /**
@@ -193,7 +193,7 @@
         const block = blockMatrix[i][j];
         const avg = calculateBlockAvg(block.data, blockSize);
         const colorFromPalette = increasingThresholdCheck(avg, palette, true)[0]; // pick the closest color from the palette
-        const blockArray = extrapolatePixelToBlock(colorFromPalette, blockSize);
+        const blockArray = extrapolatePixelToBlock(colorFromPalette || avg, blockSize);
         subArr.push(new ImageData(blockArray, pixelWidth, pixelWidth));
       }
     }
@@ -245,11 +245,11 @@
    */
   const increasingThresholdCheck = (comparator, pixels, single = false, threshold = DEFAULT_COLOR_THRESHOLD) => {
     const matches = single ? [pixels.find(p => colorsAreClose(p, comparator, threshold))]: pixels.filter(p => colorsAreClose(p, comparator, threshold));
-    if (threshold > 256) {
-      return [comparator];
-    }
     if (matches.length) {
       return matches;
+    }
+    if (threshold > 256) {
+      return [comparator];
     }
     return increasingThresholdCheck(comparator, pixels, false, threshold*2);
   }
@@ -311,7 +311,7 @@
       this.#imageDataMatrix = imageDataMatrix;
       this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
       this.#seedArray = seedArray;
-      this.#jumbleGrid();
+      // this.#jumbleGrid();
       this.seedCrawlers();
     }
 
@@ -599,7 +599,6 @@
     }
 
     const pixelWidth = PIXEL_WIDTHS.circularGet(seedArray[0]);
-    const crawlSpeed = CRAWL_SPEEDS.circularGet(seedArray[1]);
 
     // draw the image to the canvas at a scaled size
     ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
@@ -627,18 +626,13 @@
   // TODO-list:
   // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
   // TODO:
-  // - seed values again for pixel size, jumble grid
-  // - get the crawlers working until completion
-  // - maybe, add invert vs jumble as a seed
-  //    - it could essentially be, blockMatrixTransformations and pick form the array
-  // - we have a palette generating and a more block-like render
-  // - now, let's clean up the rest of the code and make a commit
   // - then, we're going to change everything to be input based (crawl speed, seed, etc)
   // - then, maybe, output a speed (though, this sounds complex)
   // - consider whether we keep the seeded crawl mechanism
   // - consider supporting new images
   // - exporting image
   // - handle crawl speeds through a map isntead of array
+  // - rename it from crawl speed
 
 </script>
 </html>
