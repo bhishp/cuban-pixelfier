@@ -59,7 +59,7 @@
 <div class="container">
     <h1>Pixelfier</h1>
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
-    <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
+    <img id="cubanTmplImg" src="img/cuban-tmpl-big.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
     <form id="seedForm">
     <input id="seed" type="text" value="CryptoCubanSocialClub" />
@@ -80,40 +80,11 @@
     return this[idx % this.length];
   }
 
-  // ideas
-  // 1 - all pixels are jumbled in a mixed up grid, then the grid is sorted to represent the guy, then it turns into a pixel character
-  // 2 - the grid sweeps across and then starts re-ordering the pixels into totally random positions, making abstract art
-  // 2a - the grid doesn't actually stay uniform, but elongates in ways to make abstract art ( a bit like a mondrian)
-
-  // TODO: Backlog
-  // - generate using predictable seed
-  // - support generating multiple crawlers
-  // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
-
-  // TODO: Make sure that functions take thing as params going forwards
-  // so, working on 4x4 blocks means we get 100x100 grid pixel
   const IMG_WIDTH = 400;
-  const pixelWidth = 40; // 16 is best
-  const blockSize = pixelWidth * pixelWidth;
+  const PIXEL_WIDTHS = [20];
   const MAX_CRAWLER_COUNT = 10; // Absolute max we can get is 32 because the SHA256 array has a length of 32 and we need to use two numbers for each crawler starting location
-
-  // TODO: Add a 'seed random' number
-  // - gives the impression of being random but it is actually generated from a seed
-  // - what are the dynamic things?
-  //    jumbled grid
-  //    crawler count
-  //    crawler steps (is this possible? Yeah, probably, even if we generate a random direction from a seed we can salt it on each decision anyway)
-  //    crawler start loc
-  //    crawler speed
-  // I'm thinking...
-  // - if all the crawlers are deterministic in their direction then even try/fails of moves will still always end up the same evntually
-
-  // an example for staged crawl speed, speeds = [50, 100, 150, 1000] (ms). Random number just picks one from this index
-  // Feels like we might need something like `function generateSeededNumber(min, max) => 'a number based on seed between these values'`
-  const generateSeededNumber = (min, max) => {
-    // need a way to conver the seed into something that a computer can look at and make up numbers..
-
-  }
+  const CRAWL_SPEEDS = [200];
+  const DEFAULT_COLOR_THRESHOLD = 12;
 
   /**
    * Converts a seed phrase to a sha256 hash. Represented as an array of unsigned 8 bit integers
@@ -151,30 +122,8 @@
       ])];
   }
 
-  // TOOLSET
-
   // A block is a square collection of pixels
   // Each block is an ImageData object, built up of a Unit8ClampedArray representing the RGBA of each pixel in that block
-
-  // https://stackoverflow.com/a/2450976
-  const shuffle = (array) => {
-    let currentIndex = array.length,  randomIndex;
-
-    // While there remain elements to shuffle...
-    while (currentIndex !== 0) {
-
-      // Pick a remaining element...
-      randomIndex = Math.floor(Math.random() * currentIndex);
-      currentIndex--;
-
-      // And swap it with the current element.
-      [array[currentIndex], array[randomIndex]] = [
-        array[randomIndex], array[currentIndex]];
-    }
-
-    return array;
-  }
-
   /**
    * Given an array representation of pixels, return the average RGBA for all those pixels
    * [1, 1, 3, 255, 3, 3, 3, 255] → [2, 2, 2, 255]
@@ -208,7 +157,7 @@
   /**
    * Split the image into a 2d array of ImageData objects, where each object is a pixelWidth block
    */
-  const blockifyImg = (ctx) => {
+  const blockifyImg = (ctx, pixelWidth) => {
     const blockMatrix = [];
 
     let dx = 0;
@@ -233,9 +182,9 @@
 
   /**
    * Given a blockMatrix - a 2d array of ImageData objects, transform this into a pixelated representation
-   * @param blockMatrix
    */
-  const pixelate = (blockMatrix) => {
+  const pixelate = (blockMatrix, pixelWidth, palette) => {
+    const blockSize = pixelWidth * pixelWidth;
     const pixelatedMatrix = [];
     for(let i = 0; i < blockMatrix.length; i++) {
       const subArr = [];
@@ -243,7 +192,8 @@
       for(let j = 0; j < blockMatrix[i].length; j++) {
         const block = blockMatrix[i][j];
         const avg = calculateBlockAvg(block.data, blockSize);
-        const blockArray = extrapolatePixelToBlock(avg, blockSize);
+        const colorFromPalette = increasingThresholdCheck(avg, palette, true)[0]; // pick the closest color from the palette
+        const blockArray = extrapolatePixelToBlock(colorFromPalette, blockSize);
         subArr.push(new ImageData(blockArray, pixelWidth, pixelWidth));
       }
     }
@@ -263,25 +213,110 @@
     return newMatrix;
   }
 
-  // TODO might need a final class, App, which will generate the Grid, allow it to map to Pixels
-  // And manage spawning of more crawlers as it needs
+  /**
+   * Given two rgba arrays, determine whether the colors are similar
+   */
+  const colorsAreClose = ([r1, g1, b1, a1], [r2, g2, b2, a2], threshold = DEFAULT_COLOR_THRESHOLD) => {
+    const rDiff = Math.abs(r1 - r2);
+    const gDiff = Math.abs(g1 - g2);
+    const bDiff = Math.abs(b1 - b2);
+    const aDiff = Math.abs(a1 - a2);
+
+    const avgDiff = (rDiff + gDiff + bDiff + aDiff) / 4;
+    return avgDiff < threshold;
+  }
+
+  /**
+   * Given a flat pixel array or [r, g, b, a, r2, g2, b2, a2, ...], zip into individual arrays => [[r, g, b, a], [r2, g2, b2, a2], ...]
+   */
+  const zipPixels = (pixels) => pixels.reduce((acc, curr, i) => {
+    const chunkIndex = Math.floor(i / 4);
+    if (!acc[chunkIndex]) {
+      acc[chunkIndex] = [];
+    }
+    acc[chunkIndex].push(curr);
+    return acc;
+  }, []);
+
+  /**
+   * Check if there are some similarly-colored pixels in the array and keep increasing the threshold until at least
+   * one match is found, or the threhold is too large
+   * @param single - return only a single item, or return all similar colors
+   */
+  const increasingThresholdCheck = (comparator, pixels, single = false, threshold = DEFAULT_COLOR_THRESHOLD) => {
+    const matches = single ? [pixels.find(p => colorsAreClose(p, comparator, threshold))]: pixels.filter(p => colorsAreClose(p, comparator, threshold));
+    if (threshold > 256) {
+      return [comparator];
+    }
+    if (matches.length) {
+      return matches;
+    }
+    return increasingThresholdCheck(comparator, pixels, false, threshold*2);
+  }
+
+  /**
+   * Given a zipped array of pixels (2d [r,g,b,a][]), create a simple palette of colors
+   * @param pixelsIn
+   * @returns {*[]}
+   */
+  const determinePalette = (pixelsIn) => {
+    const palette = [];
+    let pixels = JSON.parse(JSON.stringify(pixelsIn));
+
+    // whilst there are pixels left to match with the palette
+    while (pixels.length > 0) {
+      // if any pixels are close to colors in the existing palette then remove them as we already have a close-enough color
+      pixels = pixels.filter(p => !palette.some(pal => colorsAreClose(p, pal)));
+      if (!pixels.length) {
+        break;
+      }
+
+      // from the remaining pixels, pick one to try and find close pixels
+      const comparator = pixels.shift();
+
+      // extract close colors
+      const closeColors = increasingThresholdCheck(comparator, pixels, false);
+      if (closeColors.length) {
+        const newPaletteColor = calculateBlockAvg([...comparator, ...closeColors.flat()], closeColors.length + 1);
+        palette.push(newPaletteColor);
+      }
+    }
+    return palette;
+  }
+
+  /**
+   * Read every pixel from the canvas and work out a palette of reduced colours
+   * @param ctx
+   * @returns {*[]}
+   */
+  const createPalette = (ctx) => {
+    const imgData = ctx.getImageData(0, 0, IMG_WIDTH, IMG_WIDTH);
+    const pixels = imgData.data;
+    const zippedPixels = zipPixels(pixels);
+    return determinePalette(zippedPixels);
+  }
 
   class Grid {
     #ctx;
+    #pixelWidth;
     #imageDataMatrix;
     #fillState;
     #crawlers = [];
     #seedArray;
     #hasRun = false;
 
-    constructor(ctx, imageDataMatrix, seedArray) {
+    constructor(ctx, pixelWidth, imageDataMatrix, seedArray) {
       this.#ctx = ctx;
+      this.#pixelWidth = pixelWidth;
       this.#imageDataMatrix = imageDataMatrix;
       this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
       this.#seedArray = seedArray;
       this.#jumbleGrid();
       this.seedCrawlers();
-      // this.initiateCrawlers();
+    }
+
+    set seedArray(seedArray) {
+      this.#seedArray = seedArray;
     }
 
     get size() {
@@ -289,6 +324,10 @@
         x: this.#imageDataMatrix.length,
         y: this.#imageDataMatrix[0].length
       }
+    }
+
+    get pixelWidth() {
+      return this.#pixelWidth;
     }
 
     seedCrawlers = () => {
@@ -340,10 +379,6 @@
       return fillState;
     }
 
-    #isInsideGrid = (x, y) => {
-      return x >= 0 && x < this.size.x && y >= 0 && y < this.size.y;
-    }
-
     /**
      * Determine if a crawler can move to the given position
      */
@@ -362,6 +397,21 @@
       return !this.#crawlers.some(({ loc }) => loc.x === x && loc.y === y);
     }
 
+    findFreeSpace = () => {
+      let freeX = -1;
+      let freeY = -1;
+      freeX = this.#imageDataMatrix.findIndex((row, x) => {
+        freeY = row.findIndex((col, y) => {
+          return this.canMove(x, y);
+        });
+        return freeY !== -1;
+      });
+
+      if (freeX !== -1 && freeY !== -1) {
+        return [freeX, freeY];
+      }
+    }
+
     /**
      * Instantiates a new crawler and adds it to the crawler list
      * i is the index of this crawler as it is added to the grid
@@ -372,24 +422,44 @@
         return false;
       }
       const dirPref = seedDirPref(this.#seedArray, i);
-      this.#crawlers.push(new PixelCrawler(this.#ctx, this, x, y, dirPref));
+      this.#crawlers.push(
+        new PixelCrawler(
+          this.#ctx,
+          this,
+          x,
+          y,
+          dirPref,
+          CRAWL_SPEEDS.circularGet(this.#seedArray[1])
+        )
+      );
     }
 
     initiateCrawlers = () => {
       if (!this.#hasRun) {
         this.#hasRun = true;
-        this.#crawlers.forEach(crawler => crawler.initiate());
+
+        // if a crawler gets stuck let's see if there is a free space
+        // and teleport them there and start crawling again
+        // if no free spaces then we leave it
+        const onCrawlerStuck = (crawler) => {
+          const freeSpace = this.findFreeSpace();
+          if (freeSpace) {
+            crawler.tryMove(...freeSpace);
+            crawler.initiate(onCrawlerStuck);
+          }
+        }
+
+        this.#crawlers.forEach(crawler => crawler.initiate(onCrawlerStuck));
       }
     }
 
     draw = (x, y) => {
       if (this.#fillState[x][y]) {
-        console.error('already filled this block, return false;')
+        console.debug('already filled this block, return false;')
         return false;
       }
       const block = this.#imageDataMatrix[x][y];
-      // TODO: Scope the pixelWidth to the class
-      this.#ctx.putImageData(block, x * pixelWidth, y * pixelWidth);
+      this.#ctx.putImageData(block, x * this.pixelWidth, y * this.pixelWidth);
       this.#fillState[x][y] = true;
       return true;
     }
@@ -401,16 +471,19 @@
     #x;
     #y;
     #isCrawling = false;
+    gotStuck = false;
     #name = faker.name.firstName();
     #dirPref; // the preference for move direction
     #moveCount = 0;
+    #crawlSpeed;
 
-    constructor(ctx, grid, x = 0, y = 0, initialDirPref) {
+    constructor(ctx, grid, x = 0, y = 0, initialDirPref, crawlSpeed) {
       this.#ctx = ctx;
       this.#grid = grid;
       this.#x = x;
       this.#y = y;
       this.#dirPref = initialDirPref;
+      this.#crawlSpeed = crawlSpeed;
       this.#log('crawler constructed');
     }
 
@@ -468,7 +541,7 @@
       return this.#grid.draw(this.#x, this.#y);
     }
 
-    initiate = () => {
+    initiate = (onStuck) => {
       if (this.#isCrawling) {
         return;
       }
@@ -480,56 +553,24 @@
         this.draw();
         if(!this.move()) {
           this.#log("couldn't move, stopped crawling");
+          this.gotStuck = true;
+          this.#isCrawling = false;
           clearInterval(intervalId);
+          onStuck(this);
         }
       }
       crawl();
-      intervalId = setInterval(crawl, 200);
-    }
-  }
-
-
-  // TODO: Add to reqts, use a seed phrase to give a predictable result
-  // So, "Crytpo Cubans are the best". Each component that makes a decision (such as the snake) will use the phrase to make its decision
-  // in a predictable manner. We probably sha the phrase or something
-  // Allow a user to type any phrase, or press a button to use faker to auto-gen a phrase
-
-  const sleep = async (ms = 20) => {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  const drawBlockMatrix = async (ctx, blockMatrix) => {
-    for(let i = 0; i < blockMatrix.length; i++) {
-      for(let j = 0; j < blockMatrix[i].length; j++) {
-        const block = blockMatrix[i][j];
-        await sleep();
-        ctx.putImageData(block, i * pixelWidth, j * pixelWidth);
-      }
+      intervalId = setInterval(crawl, this.#crawlSpeed);
     }
   }
 
   // const redify = ([r, g, b, a]) => [Math.min(r * redFactor, 255), g, b, a];
   // const greenish = ([r, g, b, a]) => [r, Math.min(g * greenFactor, 255), b, a];
   // const deblue = ([r, g, b, a]) => [r, g, Math.min(b * blueFactor, 255), a];
+  // const saturate = (rgba) => rgba.map(c => Math.min(c * 1.3, 255));
 
   // note, raw img size is 3532x3532
-  // TODO: Extract to scriptfile
   const execute = async () => {
-    const seedInput = document.getElementById('seed');
-    const copySeedButton = document.getElementById('copySeedButton');
-    const seedForm = document.getElementById('seedForm');
-    // const startButton = document.getElementById('startButton');
-    let seedPhrase = seedInput.value;
-    let seedArray = await shaSeed(seedPhrase);
-    seedInput.oninput = async () => {
-      seedPhrase = seedInput.value;
-      seedArray = await shaSeed(seedPhrase);
-    }
-    copySeedButton.onclick = () => {
-      navigator.clipboard.writeText(seedPhrase);
-    }
-    const lockSeed = () => seedInput.disabled = true;
-
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
@@ -537,48 +578,43 @@
       return;
     }
 
-    // ok, where are we now?
-    // I think...
-    // - let's get a single crawler being added to the grid at a seeded location
-    // - feels like we're going to have start putting everything into the grid class now and tracking internal state
+    const seedInput = document.getElementById('seed');
+    const copySeedButton = document.getElementById('copySeedButton');
+    const seedForm = document.getElementById('seedForm');
+    const startButton = document.getElementById('startButton');
 
+    let seedPhrase = seedInput.value;
+    let seedArray = await shaSeed(seedPhrase);
 
-    // so, what's our first objective?
-    // - use the seed to generate a random starting location
-    // so, the starting location is a random x,y from within the grid constraints
-    // so, let's whack the sha seed into the Grid class
-    // and we need to convert 0-255 into a random x/y coord within boundaries
+    seedInput.oninput = async () => {
+      seedPhrase = seedInput.value;
+      seedArray = await shaSeed(seedPhrase);
+    }
+    copySeedButton.onclick = () => {
+      navigator.clipboard.writeText(seedPhrase);
+    }
+    const lock = () => {
+      seedInput.disabled = true;
+      startButton.disabled = true;
+    }
 
-
-    // returns a length 32 array of uints (0 to 255)
-    // so, we're always going to get a 32 bit array, so let's use each of the indicies for something new?
-    // like seedArr[0] is used for crawler count
-    // seed[1] is used for crawler start locations
-    // seed[3] is used for crawler move order
-
-    // e.g seed[3] => 120
-    // we use this to determine move order like:
-    // 120
-
-    // In reality, we have 32 seeds for each piece of state
-    // for example, crawler location can be inferred from each of the 32 seeds
-    // the same seeds could be used for crawler location...
-    // maybe we give the crawler the seed tokens (e.g. tokens = [seed[0], seed[1], seed[2]], then it cna use these for everything it needs
-
+    const pixelWidth = PIXEL_WIDTHS.circularGet(seedArray[0]);
+    const crawlSpeed = CRAWL_SPEEDS.circularGet(seedArray[1]);
 
     // draw the image to the canvas at a scaled size
     ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    let imageMatrix = blockifyImg(ctx);
-    imageMatrix = pixelate(imageMatrix);
-    // imageMatrix = jumbleGrid(imageMatrix);
+    let imageMatrix = blockifyImg(ctx, pixelWidth);
+    const palette = createPalette(ctx);
+    imageMatrix = pixelate(imageMatrix, pixelWidth, palette);
 
     seedForm.onsubmit = (e) => {
       e.preventDefault();
-      lockSeed();
+      lock();
       console.log(seedArray)
-      const grid = new Grid(ctx, imageMatrix, seedArray);
+      const grid = new Grid(ctx, pixelWidth, imageMatrix, seedArray);
+      grid.seedArray = seedArray;
       grid.initiateCrawlers();
     }
   }
@@ -589,14 +625,20 @@
 
   // Example seed: [53, 127, 159, 98, 103, 212, 178, 219, 154, 101, 73, 144, 213, 104, 164, 217, 181, 190, 94, 52, 173, 60, 35, 173, 86, 107, 154, 103, 125, 116, 88, 205]
   // TODO-list:
-  // - move the jumble to the Grid. X
-  // - deterministic jumble grid. X
-  // - deterministic move order. X
-  // - scope everything to the class
-  // - variable crawl speed
-
-  // Maybe todo..
-  // - TODO: Could have a spawn configuration (should it spawn more crawlers when they end? Does it maintain a consistent crawler count)
+  // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
+  // TODO:
+  // - seed values again for pixel size, jumble grid
+  // - get the crawlers working until completion
+  // - maybe, add invert vs jumble as a seed
+  //    - it could essentially be, blockMatrixTransformations and pick form the array
+  // - we have a palette generating and a more block-like render
+  // - now, let's clean up the rest of the code and make a commit
+  // - then, we're going to change everything to be input based (crawl speed, seed, etc)
+  // - then, maybe, output a speed (though, this sounds complex)
+  // - consider whether we keep the seeded crawl mechanism
+  // - consider supporting new images
+  // - exporting image
+  // - handle crawl speeds through a map isntead of array
 
 </script>
 </html>
