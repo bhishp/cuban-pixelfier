@@ -76,7 +76,7 @@
             <span id="colorDepthValue" />
         </label>
         <label>Block Width
-            <input type="number" id="blockWidth" min="1" max="400" value="20" />
+            <input type="number" id="blockWidth" min="1" max="400" value="15" />
         </label>
         <div>
             <b>Transformations:</b>
@@ -767,15 +767,6 @@
   window.onload = () => {
     execute();
   };
-
-  // Example seed: [53, 127, 159, 98, 103, 212, 178, 219, 154, 101, 73, 144, 213, 104, 164, 217, 181, 190, 94, 52, 173, 60, 35, 173, 86, 107, 154, 103, 125, 116, 88, 205]
-  // TODO-list:
-  // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
-  // TODO:
-  // - then, we're going to change everything to be input based (crawl speed, seed, etc)
-  // - consider whether we keep the seeded crawl mechanism
-  // - exporting image
-  // - host on GH Pages
 
 </script>
 </html>
