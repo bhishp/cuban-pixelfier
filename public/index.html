@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pixelfier</title>
+    <title>Cuban Pixelfier</title>
     <script src="https://cdn.jsdelivr.net/npm/faker@5.5.3/dist/faker.min.js"></script>
     <style>
       body {
@@ -58,14 +58,13 @@
 </head>
 <body>
 <div class="container">
-    <h1>Pixelfier<span id="loading">(loading...)</span></h1>
-    <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
+    <h1>Cuban Pixelfier<span id="loading">(loading...)</span></h1>
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
     <form id="seedForm">
         <input id="seed" type="text" value="CryptoCubanSocialClub" />
         <label>Crawl Speed
-            <input type="range" id="crawlSpeed" min="1" max="50" value="50" />
+            <input type="range" id="crawlSpeed" min="1" max="50" value="20" />
             <span id="crawlSpeedValue" />
         </label>
         <label>Crawler Count
@@ -73,7 +72,7 @@
             <span id="crawlerCountValue" />
         </label>
         <label>Color Depth
-            <input type="range" id="colorDepth" min="150" max="180" value="162" step="6" />
+            <input type="range" id="colorDepth" min="150" max="180" value="178" step="4" />
             <span id="colorDepthValue" />
         </label>
         <label>Block Width
@@ -92,6 +91,7 @@
             <button type="submit" id="startButton">Start</button>
             <button type="button" id="copySeedButton">Copy Seed</button>
             <button type="button" id="resetButton">Reset</button>
+            <button type="button" id="exportButton">Export</button>
         </div>
         <div>
             <b>Upload Image</b>
@@ -111,6 +111,7 @@
   }
 
   const IMG_WIDTH = 400;
+  const ORIGINAL_WIDTH = 3532;
   const TRANSFORM_JUMBLE = 1;
   const TRANSFORM_INVERT = 2;
   // const TRANSFORM_NEXT = 4;
@@ -621,7 +622,9 @@
     }
 
     const canvas = document.getElementById('canvas');
+    const offscreenCanvas = new OffscreenCanvas(ORIGINAL_WIDTH, ORIGINAL_WIDTH);
     const ctx = canvas.getContext('2d', { alpha: false });
+    const offscreenCtx = offscreenCanvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
     if (!cubanTmplImg) {
       return;
@@ -642,20 +645,8 @@
     const startButton = document.getElementById('startButton');
     const copySeedButton = document.getElementById('copySeedButton');
     const resetButton = document.getElementById('resetButton');
+    const exportButton = document.getElementById('exportButton');
     const uploadImageInput = document.getElementById('uploadImageInput');
-
-    uploadImageInput.onchange = () => {
-      const file = uploadImageInput.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        cubanTmplImg.src = reader.result;
-        cubanTmplImg.onload = () => {
-            ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
-        }
-      };
-      reader.readAsDataURL(file);
-      uploadImageInput.value = '';
-    }
 
     let seedPhrase = seedInput.value;
     let seedArray = await shaSeed(seedPhrase);
@@ -698,6 +689,38 @@
     }
     copySeedButton.onclick = () => {
       navigator.clipboard.writeText(seedPhrase);
+    }
+    exportButton.onclick = async () => {
+      // draw the canvas offscreen and scaled to the original size
+      offscreenCtx.drawImage(canvas, 0, 0, ORIGINAL_WIDTH, ORIGINAL_WIDTH);
+
+      // convert the offscreenCanvas to a Blob
+      const blob = await offscreenCanvas.convertToBlob({
+        type: 'image/jpeg',
+        quality: 1
+      });
+
+      // read the blob and download the image
+      const readBlob = new FileReader();
+      readBlob.onload = () => {
+        const link = document.createElement('a');
+        link.href = readBlob.result;
+        link.download = 'crypto-cuban.png';
+        link.click();
+      }
+      readBlob.readAsDataURL(blob)
+    }
+    uploadImageInput.onchange = () => {
+      const file = uploadImageInput.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        cubanTmplImg.src = reader.result;
+        cubanTmplImg.onload = () => {
+          ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
+        }
+      };
+      reader.readAsDataURL(file);
+      uploadImageInput.value = '';
     }
     const lock = () => {
       seedInput.disabled = true;
