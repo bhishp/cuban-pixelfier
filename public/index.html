@@ -72,6 +72,10 @@
             <input type="range" id="crawlerCount" min="1" max="10" value="3" />
             <span id="crawlerCountValue" />
         </label>
+        <label>Color Depth
+            <input type="range" id="colorDepth" min="150" max="180" value="162" step="6" />
+            <span id="colorDepthValue" />
+        </label>
         <label>Block Width
             <input type="number" id="blockWidth" min="1" max="400" value="20" />
         </label>
@@ -103,8 +107,6 @@
   }
 
   const IMG_WIDTH = 400;
-  const DEFAULT_COLOR_THRESHOLD = 12;
-
   const TRANSFORM_JUMBLE = 1;
   const TRANSFORM_INVERT = 2;
   // const TRANSFORM_NEXT = 4;
@@ -114,6 +116,7 @@
   let gCrawlerCount = 1;
   let gBlockWidth = 20;
   let gTransformations = 0; // bitwise rep of enabled transforms
+  let gDefaultColorThreshold = 12;
 
   /**
    * Converts a seed phrase to a sha256 hash. Represented as an array of unsigned 8 bit integers
@@ -133,7 +136,15 @@
     return [x, y];
   }
 
+  /**
+   * Map from a speed value (0-50) to a timeout value (in ms).
+   */
   const calculateCrawlerTimeout = (speedValue) => 10*(50 - speedValue);
+
+  /**
+   * Given a colorDepth between 150 and 180 return an inverse number (for color threshold)
+   */
+  const calculateDefaultColorThreshold = (colorDepth) => 180 - colorDepth + 6;
 
   /**
    * Given a seed array, return an dirPref array (4 length array containing the integers 0,1,2,3 at least and only once)
@@ -268,7 +279,7 @@
   /**
    * Given two rgba arrays, determine whether the colors are similar
    */
-  const colorsAreClose = ([r1, g1, b1, a1], [r2, g2, b2, a2], threshold = DEFAULT_COLOR_THRESHOLD) => {
+  const colorsAreClose = ([r1, g1, b1, a1], [r2, g2, b2, a2], threshold = gDefaultColorThreshold) => {
     const rDiff = Math.abs(r1 - r2);
     const gDiff = Math.abs(g1 - g2);
     const bDiff = Math.abs(b1 - b2);
@@ -295,7 +306,7 @@
    * one match is found, or the threhold is too large
    * @param single - return only a single item, or return all similar colors
    */
-  const increasingThresholdCheck = (comparator, pixels, single = false, threshold = DEFAULT_COLOR_THRESHOLD) => {
+  const increasingThresholdCheck = (comparator, pixels, single = false, threshold = gDefaultColorThreshold) => {
     const matches = single ? [pixels.find(p => colorsAreClose(p, comparator, threshold))]: pixels.filter(p => colorsAreClose(p, comparator, threshold));
     if (matches.length) {
       return matches;
@@ -619,6 +630,8 @@
     const crawlSpeedValue = document.getElementById('crawlSpeedValue');
     const crawlerCountInput = document.getElementById('crawlerCount');
     const crawlerCountValue = document.getElementById('crawlerCountValue');
+    const colorDepthInput = document.getElementById('colorDepth');
+    const colorDepthValue = document.getElementById('colorDepthValue');
     const blockWidthInput = document.getElementById('blockWidth');
     const transformJumbleCheckbox = document.getElementById('transformJumble');
     const transformInvertCheckbox = document.getElementById('transformInvert');
@@ -632,6 +645,8 @@
     dCrawlerTimeout = calculateCrawlerTimeout(crawlSpeedInput.value)
     crawlerCountValue.textContent = crawlerCountInput.value;
     gCrawlerCount = crawlerCountInput.value;
+    gDefaultColorThreshold = calculateDefaultColorThreshold(colorDepthInput.value)
+    colorDepthValue.textContent = colorDepthInput.value;
     gBlockWidth = Number.parseInt(blockWidthInput.value);
 
     seedInput.oninput = async () => {
@@ -645,6 +660,10 @@
     crawlerCountInput.oninput = () => {
       crawlerCountValue.textContent = crawlerCountInput.value;
       gCrawlerCount = crawlerCountInput.value;
+    }
+    colorDepthInput.oninput = () => {
+      colorDepthValue.textContent = colorDepthInput.value;
+      gDefaultColorThreshold = calculateDefaultColorThreshold(colorDepthInput.value)
     }
     blockWidthInput.oninput = () => {
       gBlockWidth = Math.min(Number.parseInt(blockWidthInput.value), 400);
@@ -713,13 +732,9 @@
   // - support exporting the image (may need an off-screen canvas if we get a pixelated export)
   // TODO:
   // - then, we're going to change everything to be input based (crawl speed, seed, etc)
-  // - then, maybe, output a speed (though, this sounds complex)
   // - consider whether we keep the seeded crawl mechanism
   // - consider supporting new images
   // - exporting image
-  // - handle crawl speeds through a map isntead of array
-  // - rename it from crawl speed
-  // - support reset
 
 </script>
 </html>
