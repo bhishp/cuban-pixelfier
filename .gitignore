@@ -107,3 +107,4 @@ dist
 
 **/*.psd
 /public/img/cuban-tmpl-2.jpg
+**/*.DS_Store
