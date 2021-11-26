@@ -49,6 +49,7 @@
         padding: 8px;
         border: 1px solid #000;
         border-radius: 4px;
+        cursor: pointer;
       }
       #startButton {
         background-color: lightgreen;
@@ -57,7 +58,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>Pixelfier</h1>
+    <h1>Pixelfier<span id="loading">(loading...)</span></h1>
     <!--    <canvas id="canvas" width="3532" height="3532"></canvas>-->
     <img id="cubanTmplImg" src="img/cuban-tmpl.jpg" alt="Crypto Cuban Template" width="400px"/>
     <canvas id="canvas" width="400" height="400"></canvas>
@@ -75,8 +76,18 @@
             <input type="number" id="blockWidth" min="1" max="400" value="20" />
         </label>
         <div>
-            <button id="startButton">Start</button>
-            <button type="submit" id="copySeedButton">Copy Seed</button>
+            <b>Transformations:</b>
+            <label>Jumble
+                <input type="checkbox" id="transformJumble" />
+            </label>
+            <label>Invert
+                <input type="checkbox" id="transformInvert" />
+            </label>
+        </div>
+        <div>
+            <button type="submit" id="startButton">Start</button>
+            <button type="button" id="copySeedButton">Copy Seed</button>
+            <button type="button" id="resetButton">Reset</button>
         </div>
     </form>
 </div>
@@ -94,10 +105,15 @@
   const IMG_WIDTH = 400;
   const DEFAULT_COLOR_THRESHOLD = 12;
 
+  const TRANSFORM_JUMBLE = 1;
+  const TRANSFORM_INVERT = 2;
+  // const TRANSFORM_NEXT = 4;
+
   // ==GLOBAL STATE== because its easy...
   let dCrawlerTimeout = 0;
   let gCrawlerCount = 1;
   let gBlockWidth = 20;
+  let gTransformations = 0; // bitwise rep of enabled transforms
 
   /**
    * Converts a seed phrase to a sha256 hash. Represented as an array of unsigned 8 bit integers
@@ -581,6 +597,14 @@
 
   // note, raw img size is 3532x3532
   const execute = async () => {
+    const loadingEl = document.getElementById('loading');
+    const loadingStart = () => {
+      loadingEl.style.display = 'inline-block';
+    }
+    const loadingEnd = () => {
+      loadingEl.style.display = 'none';
+    }
+
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const cubanTmplImg = document.getElementById('cubanTmplImg');
@@ -596,8 +620,11 @@
     const crawlerCountInput = document.getElementById('crawlerCount');
     const crawlerCountValue = document.getElementById('crawlerCountValue');
     const blockWidthInput = document.getElementById('blockWidth');
-    const copySeedButton = document.getElementById('copySeedButton');
+    const transformJumbleCheckbox = document.getElementById('transformJumble');
+    const transformInvertCheckbox = document.getElementById('transformInvert');
     const startButton = document.getElementById('startButton');
+    const copySeedButton = document.getElementById('copySeedButton');
+    const resetButton = document.getElementById('resetButton');
 
     let seedPhrase = seedInput.value;
     let seedArray = await shaSeed(seedPhrase);
@@ -622,6 +649,16 @@
     blockWidthInput.oninput = () => {
       gBlockWidth = Math.min(Number.parseInt(blockWidthInput.value), 400);
     }
+    transformJumbleCheckbox.onchange = () => {
+      gTransformations = transformJumbleCheckbox.checked ?
+        gTransformations | TRANSFORM_JUMBLE :
+        gTransformations ^ TRANSFORM_JUMBLE;
+    }
+    transformInvertCheckbox.onchange = () => {
+      gTransformations = transformInvertCheckbox.checked ?
+        gTransformations | TRANSFORM_INVERT :
+        gTransformations ^ TRANSFORM_INVERT;
+    }
     copySeedButton.onclick = () => {
       navigator.clipboard.writeText(seedPhrase);
     }
@@ -629,25 +666,41 @@
       seedInput.disabled = true;
       startButton.disabled = true;
     }
-
-    // const pixelWidth = PIXEL_WIDTHS.circularGet(seedArray[0]);
-    // const pixelWidth = 20;
+    const unlock = () => {
+      seedInput.disabled = false;
+      startButton.disabled = false;
+    }
 
     // draw the image to the canvas at a scaled size
     ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
-    cubanTmplImg.style.display = 'none'; // if we want to hide the src image
+    cubanTmplImg.style.display = 'none';
+    loadingEnd();
 
     seedForm.onsubmit = (e) => {
       e.preventDefault();
+      loadingStart();
       lock();
-      console.log(seedArray)
-      let imageMatrix = blockifyImg(ctx, gBlockWidth);
-      const palette = createPalette(ctx);
-      imageMatrix = pixelate(imageMatrix, gBlockWidth, palette);
-      // imageMatrix = jumbleGrid(imageMatrix, seedArray);
-      const grid = new Grid(ctx, gBlockWidth, imageMatrix, seedArray);
-      grid.seedArray = seedArray;
-      grid.initiateCrawlers();
+      setTimeout(() => {
+        console.log(seedArray)
+        let imageMatrix = blockifyImg(ctx, gBlockWidth);
+        const palette = createPalette(ctx);
+        imageMatrix = pixelate(imageMatrix, gBlockWidth, palette);
+        if (gTransformations & TRANSFORM_JUMBLE) {
+          imageMatrix = jumbleGrid(imageMatrix, seedArray);
+        }
+        if (gTransformations & TRANSFORM_INVERT) {
+          imageMatrix = invertBlockMatrix(imageMatrix);
+        }
+        const grid = new Grid(ctx, gBlockWidth, imageMatrix, seedArray);
+        grid.seedArray = seedArray;
+        grid.initiateCrawlers();
+        loadingEnd();
+      }, 1);
+    }
+
+    resetButton.onclick = () => {
+      ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
+      unlock();
     }
   }
 
@@ -666,6 +719,7 @@
   // - exporting image
   // - handle crawl speeds through a map isntead of array
   // - rename it from crawl speed
+  // - support reset
 
 </script>
 </html>
