@@ -93,6 +93,10 @@
             <button type="button" id="copySeedButton">Copy Seed</button>
             <button type="button" id="resetButton">Reset</button>
         </div>
+        <div>
+            <b>Upload Image</b>
+            <input type="file" id="uploadImageInput" />
+        </div>
     </form>
 </div>
 </body>
@@ -638,6 +642,20 @@
     const startButton = document.getElementById('startButton');
     const copySeedButton = document.getElementById('copySeedButton');
     const resetButton = document.getElementById('resetButton');
+    const uploadImageInput = document.getElementById('uploadImageInput');
+
+    uploadImageInput.onchange = () => {
+      const file = uploadImageInput.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        cubanTmplImg.src = reader.result;
+        cubanTmplImg.onload = () => {
+            ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
+        }
+      };
+      reader.readAsDataURL(file);
+      uploadImageInput.value = '';
+    }
 
     let seedPhrase = seedInput.value;
     let seedArray = await shaSeed(seedPhrase);
@@ -733,8 +751,8 @@
   // TODO:
   // - then, we're going to change everything to be input based (crawl speed, seed, etc)
   // - consider whether we keep the seeded crawl mechanism
-  // - consider supporting new images
   // - exporting image
+  // - host on GH Pages
 
 </script>
 </html>

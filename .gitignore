@@ -106,3 +106,4 @@ dist
 .idea
 
 **/*.psd
+/public/img/cuban-tmpl-2.jpg
