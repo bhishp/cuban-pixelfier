@@ -64,7 +64,15 @@
     <form id="seedForm">
         <input id="seed" type="text" value="CryptoCubanSocialClub" />
         <label>Crawl Speed
-            <input type="range" id="crawlSpeed" min="1" max="100" value="50" />
+            <input type="range" id="crawlSpeed" min="1" max="50" value="50" />
+            <span id="crawlSpeedValue" />
+        </label>
+        <label>Crawler Count
+            <input type="range" id="crawlerCount" min="1" max="10" value="3" />
+            <span id="crawlerCountValue" />
+        </label>
+        <label>Block Width
+            <input type="number" id="blockWidth" min="1" max="400" value="20" />
         </label>
         <div>
             <button id="startButton">Start</button>
@@ -84,12 +92,12 @@
   }
 
   const IMG_WIDTH = 400;
-  const PIXEL_WIDTHS = [20];
-  const MAX_CRAWLER_COUNT = 10; // Absolute max we can get is 32 because the SHA256 array has a length of 32 and we need to use two numbers for each crawler starting location
   const DEFAULT_COLOR_THRESHOLD = 12;
 
   // ==GLOBAL STATE== because its easy...
-  let crawlerTimeout = 0;
+  let dCrawlerTimeout = 0;
+  let gCrawlerCount = 1;
+  let gBlockWidth = 20;
 
   /**
    * Converts a seed phrase to a sha256 hash. Represented as an array of unsigned 8 bit integers
@@ -109,12 +117,7 @@
     return [x, y];
   }
 
-  /**
-   * Returns a number between 1 and MAX_CRAWLER_COUNT based on a seed int, n
-   */
-  const seededCrawlerCount = (n) => Math.max(n % MAX_CRAWLER_COUNT, 1);
-
-  const calculateCrawlerTimeout = (speedValue) => 20*(100 - speedValue);
+  const calculateCrawlerTimeout = (speedValue) => 10*(50 - speedValue);
 
   /**
    * Given a seed array, return an dirPref array (4 length array containing the integers 0,1,2,3 at least and only once)
@@ -206,6 +209,32 @@
     }
 
     return pixelatedMatrix;
+  }
+
+  /**
+   * Jumble the grid in a 'random' (but deterministic) order
+   * Is not actually random but jumbled according to the seed array
+   * Updates the imageDataMatrix in-place
+   */
+  jumbleGrid = (blockMatrix, seedArray) => {
+    const newMatrix = [];
+    const sizeX = blockMatrix.length;
+    const sizeY = blockMatrix[0].length;
+    let seedIdx = 0;
+
+    for(let i = 0; i < sizeX; i++) {
+      const subArr = [];
+      newMatrix.push(subArr);
+      for(let j = 0; j < sizeY; j++) {
+        const seedValue = seedArray.circularGet(i*seedIdx);
+        seedIdx++;
+
+        const x = seedValue % sizeX;
+        const y = sizeY - 1 - x;
+        subArr.push(blockMatrix[x][y]);
+      }
+    }
+    return newMatrix;
   }
 
   const invertBlockMatrix = (blockMatrix) => {
@@ -318,7 +347,6 @@
       this.#imageDataMatrix = imageDataMatrix;
       this.#fillState = this.#generateFalseMatrix(imageDataMatrix);
       this.#seedArray = seedArray;
-      // this.#jumbleGrid();
       this.seedCrawlers();
     }
 
@@ -338,35 +366,10 @@
     }
 
     seedCrawlers = () => {
-      const crawlerCount = seededCrawlerCount(this.#seedArray[0]);
-      for(let i = 0; i < crawlerCount; i++) {
+      for(let i = 0; i < gCrawlerCount; i++) {
         const [x, y] = seededCoords(this.#seedArray[i], this.#seedArray[i + 1], this.size.x);
         this.addCrawler(x, y, i);
       }
-    }
-
-    /**
-     * Jumble the grid in a 'random' (but deterministic) order
-     * Is not actually random but jumbled according to the seed array
-     * Updates the imageDataMatrix in-place
-     */
-    #jumbleGrid = () => {
-      const newMatrix = [];
-      let seedIdx = 0;
-
-      for(let i = 0; i < this.size.x; i++) {
-        const subArr = [];
-        newMatrix.push(subArr);
-        for(let j = 0; j < this.size.y; j++) {
-          const seedValue = this.#seedArray.circularGet(seedIdx);
-          seedIdx++;
-
-          const x = seedValue % this.size.x;
-          const y = this.size.y - 1 - x;
-          subArr.push(this.#imageDataMatrix[x][y]);
-        }
-      }
-      this.#imageDataMatrix = newMatrix;
     }
 
     /**
@@ -436,7 +439,7 @@
           x,
           y,
           dirPref,
-          crawlerTimeout,
+          dCrawlerTimeout,
         )
       );
     }
@@ -585,23 +588,39 @@
       return;
     }
 
-    // form values
+    // DOM
     const seedForm = document.getElementById('seedForm');
     const seedInput = document.getElementById('seed');
     const crawlSpeedInput = document.getElementById('crawlSpeed');
+    const crawlSpeedValue = document.getElementById('crawlSpeedValue');
+    const crawlerCountInput = document.getElementById('crawlerCount');
+    const crawlerCountValue = document.getElementById('crawlerCountValue');
+    const blockWidthInput = document.getElementById('blockWidth');
     const copySeedButton = document.getElementById('copySeedButton');
     const startButton = document.getElementById('startButton');
 
     let seedPhrase = seedInput.value;
     let seedArray = await shaSeed(seedPhrase);
-    crawlerTimeout = calculateCrawlerTimeout(crawlSpeedInput.value)
+    crawlSpeedValue.textContent = crawlSpeedInput.value;
+    dCrawlerTimeout = calculateCrawlerTimeout(crawlSpeedInput.value)
+    crawlerCountValue.textContent = crawlerCountInput.value;
+    gCrawlerCount = crawlerCountInput.value;
+    gBlockWidth = Number.parseInt(blockWidthInput.value);
 
     seedInput.oninput = async () => {
       seedPhrase = seedInput.value;
       seedArray = await shaSeed(seedPhrase);
     }
     crawlSpeedInput.oninput = () => {
-      crawlerTimeout = calculateCrawlerTimeout(crawlSpeedInput.value)
+      crawlSpeedValue.textContent = crawlSpeedInput.value;
+      dCrawlerTimeout = calculateCrawlerTimeout(crawlSpeedInput.value)
+    }
+    crawlerCountInput.oninput = () => {
+      crawlerCountValue.textContent = crawlerCountInput.value;
+      gCrawlerCount = crawlerCountInput.value;
+    }
+    blockWidthInput.oninput = () => {
+      gBlockWidth = Math.min(Number.parseInt(blockWidthInput.value), 400);
     }
     copySeedButton.onclick = () => {
       navigator.clipboard.writeText(seedPhrase);
@@ -611,21 +630,22 @@
       startButton.disabled = true;
     }
 
-    const pixelWidth = PIXEL_WIDTHS.circularGet(seedArray[0]);
+    // const pixelWidth = PIXEL_WIDTHS.circularGet(seedArray[0]);
+    // const pixelWidth = 20;
 
     // draw the image to the canvas at a scaled size
     ctx.drawImage(cubanTmplImg, 0, 0, IMG_WIDTH, IMG_WIDTH);
     cubanTmplImg.style.display = 'none'; // if we want to hide the src image
 
-    let imageMatrix = blockifyImg(ctx, pixelWidth);
-    const palette = createPalette(ctx);
-    imageMatrix = pixelate(imageMatrix, pixelWidth, palette);
-
     seedForm.onsubmit = (e) => {
       e.preventDefault();
       lock();
       console.log(seedArray)
-      const grid = new Grid(ctx, pixelWidth, imageMatrix, seedArray);
+      let imageMatrix = blockifyImg(ctx, gBlockWidth);
+      const palette = createPalette(ctx);
+      imageMatrix = pixelate(imageMatrix, gBlockWidth, palette);
+      // imageMatrix = jumbleGrid(imageMatrix, seedArray);
+      const grid = new Grid(ctx, gBlockWidth, imageMatrix, seedArray);
       grid.seedArray = seedArray;
       grid.initiateCrawlers();
     }
