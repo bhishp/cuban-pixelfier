@@ -1,5 +1,7 @@
 # Cuban Pixelfier
 
+https://bhishp.github.io/cuban-pixelfier/
+
 The Cuban Pixelfier is an art project that... pixelates cubans!
 
 This project is a submission for the [cryptocubansocialclub](https://www.cryptocubansocialclub.com) art contest.
@@ -20,6 +22,6 @@ This is my first attempt at "generative art" (does this even count?), I hope you
 
 # How to use it?
 
-* Open the app on GitHub pages here:
+* Open the app on GitHub pages here: https://bhishp.github.io/cuban-pixelfier/
 * Play around with inputs and the seed phrase
 * Look at art
